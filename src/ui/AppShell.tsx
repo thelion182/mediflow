@@ -169,7 +169,7 @@ const logoAreaStyle: React.CSSProperties = {
 };
 
 const logoImgStyle: React.CSSProperties = {
-  height: 30,
+  height: 44,
   width: "auto",
   display: "block",
   objectFit: "contain",

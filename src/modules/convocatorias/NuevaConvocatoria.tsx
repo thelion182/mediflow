@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { authStore } from "../../auth/auth.store";
 import { AppShell } from "../../ui/AppShell";
@@ -18,7 +18,7 @@ function prio(n?: number) {
 }
 
 function cargoOf(m: any) {
-  // Usamos especialidad como “Cargo/Especialidad” para filtrar.
+  // Usamos especialidad como "Cargo/Especialidad" para filtrar.
   const c = String(m?.especialidad ?? "").trim();
   return c || "SIN_CARGO";
 }
@@ -38,7 +38,7 @@ export function NuevaConvocatoria() {
   const session = authStore.getSession()!;
   const nav = useNavigate();
 
-  // ✅ Para “releer” catálogos sin recargar
+  // ✅ Para "releer" catálogos sin recargar
   const [tick, setTick] = useState(0);
 
   // =========================
@@ -53,7 +53,7 @@ export function NuevaConvocatoria() {
   }, [tick]);
 
   // =========================
-  // Sector / Sede (dropdown + “Otro…”)
+  // Sector / Sede (dropdown + "Otro…")
   // =========================
   const [sectorSel, setSectorSel] = useState<string>(() => sectoresActivos[0]?.nombre ?? "Emergencia");
   const [sectorOtro, setSectorOtro] = useState("");
@@ -269,6 +269,18 @@ export function NuevaConvocatoria() {
     });
   }, [destinatarios, medicosFiltradosOrdenados, prioOverride]);
 
+  // Business rule: Ambulancias / Piso → solo sedes SANATORIO
+  const SECTORES_SOLO_SANATORIO = ["ambulancias", "piso"];
+  const sectorFinalNow = sectorSel === OTRO ? sectorOtro : sectorSel;
+  const sedeFinalNow   = sedeSel   === OTRO ? sedeOtro   : sedeSel;
+  const sedeObjNow     = sedesActivas.find((s: any) => s.nombre === sedeFinalNow);
+  const sectorRestringido = SECTORES_SOLO_SANATORIO.some(
+    x => sectorFinalNow.trim().toLowerCase() === x
+  );
+  const showSanatorioWarning =
+    sectorRestringido &&
+    (sedeSel === OTRO || (sedeObjNow && (sedeObjNow as any).tipo !== "SANATORIO") || !sedeObjNow);
+
   function submit() {
     const sectorFinal = sectorValueFinal();
     const sedeFinal = sedeValueFinal();
@@ -377,6 +389,24 @@ export function NuevaConvocatoria() {
                   />
                 ) : null}
               </div>
+
+              {/* Restriccion sector-sede */}
+              {showSanatorioWarning && (
+                <div style={{
+                  gridColumn: "1 / -1",
+                  padding: "10px 14px",
+                  borderRadius: 8,
+                  background: "rgba(217,119,6,0.08)",
+                  border: "1px solid rgba(217,119,6,0.30)",
+                  color: "rgb(180,98,5)",
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                }}>
+                  <b>Atencion:</b> el sector <b>{sectorFinalNow}</b> solo puede cubrirse en sanatorios
+                  (Galicia, Central Lenguas, Juan Lacaze, Juan Pablo II).
+                  La sede seleccionada no es un sanatorio.
+                </div>
+              )}
 
               <div className="field">
                 <label className="label">Inicio</label>

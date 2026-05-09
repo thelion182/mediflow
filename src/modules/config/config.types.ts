@@ -56,12 +56,20 @@ export type EmailConfig = {
   awsSecretKey?: string;
 };
 
+// ── Fotos config ──────────────────────────────────────────────────────────
+export type FotosConfig = {
+  baseUrl: string;                                   // e.g. "/fotos" or "http://intranet/fotos"
+  campo: "funcionario" | "userId" | "cedula";        // campo del Medico usado como nombre de archivo
+  extension: "jpg" | "png" | "webp" | "jpeg";
+};
+
 // ── System config ─────────────────────────────────────────────────────────
 export type SystemConfig = {
   organizacion: {
     nombre: string;
     whatsappSuplencias: string;   // número de línea de coordinación (+598...)
   };
+  fotos: FotosConfig;
   canales: {
     app: AppCanalConfig;
     whatsapp: WhatsAppConfig;

@@ -1,4 +1,4 @@
-import { storage } from "../../core/storage";
+﻿import { storage } from "../../core/storage";
 import { newId } from "../../core/id";
 import { nowIso } from "../../core/date";
 import { hoursBetween } from "../../core/hours";
@@ -7,7 +7,7 @@ import type { Canal, Convocatoria, ConvocatoriaEstado, Invitacion, Asignacion } 
 
 const KEY = "mediflow.convocatorias.v1";
 
-// Defaults “genéricos” (fallback final)
+// Defaults "genéricos" (fallback final)
 const DEFAULT_SIN_VER_MIN = 60;
 const DEFAULT_SIN_RESP_MIN = 60;
 
@@ -55,7 +55,7 @@ function isSequential(c: Convocatoria) {
 }
 
 function defaultTimeoutsByPrioridad(prio: "NORMAL" | "ALTA" | undefined) {
-  // Regla operativa (tu “autopiloto”)
+  // Regla operativa (tu "autopiloto")
   if (prio === "ALTA") return { sinVerMin: 15, sinResponderMin: 10 };
   if (prio === "NORMAL") return { sinVerMin: 30, sinResponderMin: 15 };
   return { sinVerMin: DEFAULT_SIN_VER_MIN, sinResponderMin: DEFAULT_SIN_RESP_MIN };
@@ -256,18 +256,18 @@ export const convocatoriaStore = {
     /**
      * ✅ NUEVO:
      * - false/undefined: el store reordena por prioridad del catálogo (comportamiento viejo)
-     * - true: respeta EXACTO el orden que mandó la UI (tu orden “real” por filtro/override)
+     * - true: respeta EXACTO el orden que mandó la UI (tu orden "real" por filtro/override)
      */
     keepOrder?: boolean;
 
-    /** Canales habilitados para esta convocatoria (ej: [“APP”,”WHATSAPP”]). El primero es el canal principal. */
+    /** Canales habilitados para esta convocatoria (ej: ["APP","WHATSAPP"]). El primero es el canal principal. */
     canales?: Canal[];
   }): Convocatoria {
     const all = storage.get<Convocatoria[]>(KEY, []);
 
     const cupos = Number(input.cupos) || 1;
-    const modo = input.modoEnvio ?? (cupos === 1 ? “SECUENCIAL” : “MASIVO”);
-    const canalPrimario: Canal = input.canales?.[0] ?? “APP”;
+    const modo = input.modoEnvio ?? (cupos === 1 ? "SECUENCIAL" : "MASIVO");
+    const canalPrimario: Canal = input.canales?.[0] ?? "APP";
 
     // ✅ CLAVE: el orden final lo decide la UI si keepOrder=true
     const ordered = input.keepOrder
@@ -275,16 +275,16 @@ export const convocatoriaStore = {
       : sortDestinatariosByPrioridad(input.destinatarios);
 
     const invitaciones: Invitacion[] =
-      modo === “SECUENCIAL” && cupos === 1
+      modo === "SECUENCIAL" && cupos === 1
         ? ordered.map((medicoId, idx) => ({
             medicoId,
-            estado: idx === 0 ? “ENVIADA” : “EN_ESPERA”,
+            estado: idx === 0 ? "ENVIADA" : "EN_ESPERA",
             canal: canalPrimario,
             sentAt: idx === 0 ? nowIso() : undefined
           }))
         : ordered.map((medicoId) => ({
             medicoId,
-            estado: “ENVIADA”,
+            estado: "ENVIADA",
             canal: canalPrimario,
             sentAt: nowIso()
           }));

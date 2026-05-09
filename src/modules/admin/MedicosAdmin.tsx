@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { parseCsv } from "../../core/csv";
 import { medicosStore } from "./medicos.store";
 import type { Medico, MedicoTipo } from "./medicos.types";
+import { DoctorAvatar } from "./DoctorAvatar";
 
 function normalizeUserId(input: string) {
   return (input || "").trim();
@@ -294,7 +295,8 @@ export function MedicosAdmin() {
         <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
           {list.map(m => (
             <div key={m.userId} className="btnGhost" style={{ padding: 12, textAlign: "left" }}>
-              <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+              <div className="row" style={{ gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                <DoctorAvatar medico={m} size={36} />
                 <b>{m.displayName}</b>
                 <span className="pill">{m.userId}</span>
                 <span className="pill">{String(m.tipo ?? "SUPLENTE")}</span>

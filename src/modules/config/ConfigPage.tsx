@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { AppShell } from "../../ui/AppShell";
 import { configStore } from "./config.store";
-import type { SystemConfig, Canal, WhatsAppProvider, SmsProvider, EmailProvider } from "./config.types";
+import type { SystemConfig, Canal, WhatsAppProvider, SmsProvider, EmailProvider, FotosConfig } from "./config.types";
 import { CANAL_META } from "./config.types";
 
 type Tab = "org" | "canales" | "defaults" | "scoring";
@@ -133,6 +133,9 @@ export function ConfigPage() {
   }
   function setScoring<K extends keyof SystemConfig["scoring"]>(k: K, v: any) {
     setCfg(c => ({ ...c, scoring: { ...c.scoring, [k]: v } }));
+  }
+  function setFotos<K extends keyof FotosConfig>(k: K, v: any) {
+    setCfg(c => ({ ...c, fotos: { ...c.fotos, [k]: v } }));
   }
   function toggleDefaultCanal(canal: Canal) {
     setCfg(c => {
@@ -596,6 +599,46 @@ export function ConfigPage() {
           <Field label="WhatsApp de coordinación (Suplencias)" hint="Número al que los médicos pueden enviar respuestas rápidas por WA">
             <Input value={cfg.organizacion.whatsappSuplencias} onChange={v => setOrg("whatsappSuplencias", v)} placeholder="+598XXXXXXXX" />
           </Field>
+
+          <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid var(--border-2)" }}>
+            <p style={{ margin: "0 0 14px", fontSize: 14, fontWeight: 700, color: "var(--text)" }}>Fotos de médicos</p>
+            <Field label="URL base de la carpeta de fotos" hint="Ruta local o URL de la intranet donde se encuentran las imágenes (sin barra final)">
+              <Input
+                value={cfg.fotos.baseUrl}
+                onChange={v => setFotos("baseUrl", v)}
+                placeholder="http://intranet/fotos"
+              />
+            </Field>
+            <Field label="Campo del médico usado como nombre de archivo" hint="El valor de este campo + extensión forma el nombre del archivo de imagen">
+              <Select
+                value={cfg.fotos.campo}
+                onChange={v => setFotos("campo", v as FotosConfig["campo"])}
+                options={[
+                  { value: "funcionario", label: "Nro funcionario (campo: funcionario)" },
+                  { value: "cedula",      label: "Cédula de identidad (campo: cedula)" },
+                  { value: "userId",      label: "userId completo (ej: F-93598)" },
+                ]}
+              />
+            </Field>
+            <Field label="Extensión de imagen">
+              <Select
+                value={cfg.fotos.extension}
+                onChange={v => setFotos("extension", v as FotosConfig["extension"])}
+                options={[
+                  { value: "jpg",  label: "JPG / JPEG" },
+                  { value: "jpeg", label: "JPEG" },
+                  { value: "png",  label: "PNG" },
+                  { value: "webp", label: "WebP" },
+                ]}
+              />
+            </Field>
+            {cfg.fotos.baseUrl && (
+              <div style={{ ...infoBoxStyle, marginTop: 2 }}>
+                Las fotos se cargarán como: <code style={{ fontFamily: "monospace", fontSize: 12 }}>{cfg.fotos.baseUrl}/{"{" + cfg.fotos.campo + "}"}.{cfg.fotos.extension}</code>
+                <br />Las miniaturas cacheadas se guardan en el navegador (localStorage). Si la URL base es externa, verificá que el servidor permita CORS.
+              </div>
+            )}
+          </div>
 
           <div style={{ marginTop: 24, padding: 14, borderRadius: 10, background: "var(--surface-2)", border: "1px solid var(--border-2)" }}>
             <p style={{ margin: "0 0 6px", fontSize: 13, fontWeight: 700, color: "var(--text)" }}>Accesos demo activos</p>

@@ -2,9 +2,10 @@ import React, { useMemo, useState } from "react";
 import { MedicosAdmin } from "./MedicosAdmin";
 import { SedesAdmin } from "./SedesAdmin";
 import { SectoresAdmin } from "./SectoresAdmin";
+import { ScoringAdmin } from "./ScoringAdmin";
 import { AppShell } from "../../ui/AppShell";
 
-type Tab = "MEDICOS" | "SEDES" | "SECTORES";
+type Tab = "MEDICOS" | "SEDES" | "SECTORES" | "SCORING";
 
 export function AdminDashboard() {
   const [tab, setTab] = useState<Tab>("MEDICOS");
@@ -17,10 +18,9 @@ export function AdminDashboard() {
         "Prioridad: 1 = primero (impacta en Nueva Convocatoria → modo Secuencial)."
       );
     }
-    if (tab === "SEDES") {
-      return "Catálogo de Sedes. Se usa para clasificar y filtrar convocatorias.";
-    }
-    return "Catálogo de Sectores. Se usa para clasificar y filtrar convocatorias.";
+    if (tab === "SEDES") return "Catálogo de Sedes. Se usa para clasificar y filtrar convocatorias.";
+    if (tab === "SECTORES") return "Catálogo de Sectores. Se usa para clasificar y filtrar convocatorias.";
+    return "Scores calculados automáticamente a partir del historial de convocatorias. Configurá los pesos en Configuración → Scoring.";
   }, [tab]);
 
   return (
@@ -33,7 +33,7 @@ export function AdminDashboard() {
 
       {/* Tabs */}
       <div style={{ display: "flex", gap: 6, marginBottom: 18, borderBottom: "1px solid var(--border)", paddingBottom: 0 }}>
-        {(["MEDICOS", "SEDES", "SECTORES"] as const).map(t => (
+        {(["MEDICOS", "SEDES", "SECTORES", "SCORING"] as const).map(t => (
           <button key={t} onClick={() => setTab(t)} style={{
             padding: "8px 16px",
             borderRadius: "8px 8px 0 0",
@@ -47,7 +47,7 @@ export function AdminDashboard() {
             marginBottom: -1,
             transition: "background 0.12s, color 0.12s",
           }}>
-            {t === "MEDICOS" ? "Médicos" : t === "SEDES" ? "Sedes" : "Sectores"}
+            {t === "MEDICOS" ? "Médicos" : t === "SEDES" ? "Sedes" : t === "SECTORES" ? "Sectores" : "Scoring"}
           </button>
         ))}
       </div>
@@ -55,6 +55,7 @@ export function AdminDashboard() {
       {tab === "MEDICOS"   ? <MedicosAdmin />   : null}
       {tab === "SEDES"     ? <SedesAdmin />     : null}
       {tab === "SECTORES"  ? <SectoresAdmin />  : null}
+      {tab === "SCORING"   ? <ScoringAdmin />   : null}
     </AppShell>
   );
 }

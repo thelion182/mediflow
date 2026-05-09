@@ -42,11 +42,11 @@ const DEFAULT: Sede[] = [
     activo: true
   },
 
-  // Interior: en la web figura como sanatorio, pero en Mediflow lo dejamos como FILIAL (editable)
+  // Interior: sanatorio
   {
     id: "FILIAL_JUAN_LACAZE",
     nombre: "Juan Lacaze (Sanatorio)",
-    tipo: "FILIAL",
+    tipo: "SANATORIO",
     departamento: "Colonia",
     direccion: "José Salvo 212",
     telefono: "2487 95 56",

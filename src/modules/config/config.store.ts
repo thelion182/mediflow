@@ -8,6 +8,11 @@ export const DEFAULT_CONFIG: SystemConfig = {
     nombre: "Organización Médica",
     whatsappSuplencias: "+59899737934",
   },
+  fotos: {
+    baseUrl: "",
+    campo: "funcionario",
+    extension: "jpg",
+  },
   canales: {
     app: { enabled: true },
     whatsapp: {
