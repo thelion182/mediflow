@@ -1,0 +1,71 @@
+:root {
+  /* ── Neutrals ──────────────────────────────── */
+  --bg: #f4f7fb;
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+  --border: #e2e8f0;
+  --border-2: #f1f5f9;
+  --text: #0f172a;
+  --muted: #64748b;
+  --subtle: #94a3b8;
+
+  /* ── Primary — Medi Blue (logo) ────────────── */
+  --blue: #1565C0;
+  --blue-dark: #0D47A1;
+  --blue-mid: #1976D2;
+  --blue-light: #42A5F5;
+  --blue-rgb: 21, 101, 192;
+  --blue-tint: rgba(21, 101, 192, 0.08);
+  --blue-tint-2: rgba(21, 101, 192, 0.14);
+
+  /* ── Secondary — Flow Green (logo) ─────────── */
+  --green: #6DBF3C;
+  --green-dark: #4A9A2C;
+  --green-light: #8DC63F;
+  --green-rgb: 109, 191, 60;
+  --green-tint: rgba(109, 191, 60, 0.10);
+
+  /* ── Accent — Teal (punto i del logo) ──────── */
+  --teal: #26A69A;
+  --teal-dark: #00897B;
+  --teal-rgb: 38, 166, 154;
+  --teal-tint: rgba(38, 166, 154, 0.10);
+
+  /* ── Semantic ───────────────────────────────── */
+  --primary: var(--blue);
+  --primary-dark: var(--blue-dark);
+  --primary-2: var(--blue-mid);
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #dc2626;
+  --info: var(--teal);
+
+  /* ── Module accents (RGB para rgba()) ──────── */
+  --mod-convocatorias-rgb: var(--blue-rgb);
+  --mod-parte-diario-rgb: var(--green-rgb);
+  --mod-medicos-rgb: var(--teal-rgb);
+  --mod-reportes-rgb: 217, 119, 6;
+  --mod-admin-rgb: 124, 58, 237;
+  --mod-config-rgb: 100, 116, 139;
+
+  /* ── Layout ─────────────────────────────────── */
+  --sidebar-w: 224px;
+  --radius: 12px;
+  --radius-lg: 16px;
+  --shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 4px 16px rgba(15, 23, 42, 0.06);
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(15, 23, 42, 0.04);
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(900px 500px at 15% 0%, rgba(21, 101, 192, 0.09), transparent 60%),
+    radial-gradient(800px 400px at 85% 5%, rgba(109, 191, 60, 0.06), transparent 55%),
+    var(--bg);
+}
+
+a { color: inherit; text-decoration: none; }

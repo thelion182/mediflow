@@ -1,0 +1,284 @@
+.container{
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.card{
+  width: min(420px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px;
+}
+
+/* Asegura que el header del login sea una columna */
+.cardHeader{
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+
+.brand{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+}
+
+.mfBrand{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+}
+
+.mfBrandIcon{
+  display:block;
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.mfBrandWordmark{
+  display:block;
+}
+
+
+.logoMark{
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(37,99,235,1) 0%, rgba(14,165,233,1) 100%);
+  box-shadow: var(--shadow-sm);
+}
+
+.h1{
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.sub{
+  margin: 6px 0 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.field{
+  margin-top: 14px;
+}
+.label{
+  font-size: 12px;
+  color: var(--muted);
+  display:block;
+  margin-bottom: 6px;
+}
+.input, .select{
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: #fbfdff;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.input:focus, .select:focus{
+  border-color: rgba(37,99,235,.55);
+  box-shadow: 0 0 0 4px rgba(37,99,235,.12);
+  background: #ffffff;
+}
+
+.row{
+  display:flex;
+  gap: 10px;
+  align-items:center;
+  justify-content: space-between;
+}
+
+.btn{
+  width: 100%;
+  margin-top: 14px;
+  padding: 11px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(37,99,235,.25);
+  background: linear-gradient(180deg, rgba(37,99,235,1), rgba(29,78,216,1));
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 10px 20px rgba(37,99,235,.18);
+  transition: transform .08s ease, filter .15s ease;
+}
+.btn:active{ transform: translateY(1px); }
+.btn:hover{ filter: brightness(1.02); }
+
+.btnGhost{
+  padding: 9px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.7);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+}
+
+.page{
+  min-height: 100vh;
+  padding: 18px;
+}
+
+.shell{
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.topbar{
+  display:flex;
+  justify-content: space-between;
+  align-items:center;
+  padding: 14px 16px;
+  background: rgba(255,255,255,0.75);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow-sm);
+}
+
+.h2{
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: -0.02em;
+}
+
+.pill{
+  display:inline-flex;
+  align-items:center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.75);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.grid{
+  margin-top: 14px;
+  display:grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 12px;
+}
+
+.panel{
+  grid-column: span 12;
+  background: rgba(255,255,255,0.85);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+@media (min-width: 900px){
+  .panel.half{ grid-column: span 6; }
+}
+.brand--login{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 14px;
+  padding-bottom: 6px;
+}
+
+.brand--login .brandLeft{
+  display:flex;
+  align-items:center;
+  min-width: 0;
+}
+
+.pill--demo{
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-weight: 700;
+  letter-spacing: .2px;
+}
+
+.sub--login{
+  line-height: 1.35;
+  max-width: 52ch;
+}
+
+/* Punch del logo */
+.brand--login .mfBrand{
+  gap: 12px;
+}
+
+.brand--login .mfBrandIcon{
+  border-radius: 14px;
+  box-shadow: 0 10px 26px rgba(0,0,0,.10);
+  transform: translateY(1px);
+}
+
+.brand--login .mfBrandWordmark{
+  transform: translateY(1px);
+}
+.brand--login .mfBrandWordmark{
+  height: 44px !important;
+  width: auto !important;
+  display: block;
+}
+/* recorte visual del wordmark si el PNG trae aire */
+.brand--login .mfBrandWordmark{
+  object-fit: contain;
+  object-position: left center;
+}
+
+/* si aún se ve con aire, esto lo “empuja” un poco */
+.brand--login .mfBrand{
+  align-items: center;
+}
+.brand--login .mfBrandIcon{
+  box-shadow: 0 16px 34px rgba(0,0,0,.12);
+}
+/* Logo horizontal centrado */
+.mfLockup{
+  width: 100%;
+  max-width: 420px;           /* controla el ancho máximo del logo */
+  height: auto;
+  display: block;
+  object-fit: contain;
+  object-position: center;
+  margin: 0 auto;             /* 🔹 centra dentro del card */
+}
+
+/* Fila debajo del logo */
+.mfLoginMeta{
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;    /* 🔹 centra Demo + texto */
+  gap: 14px;
+}
+
+/* Texto descriptivo */
+.mfLoginTagline{
+  margin: 0;
+  line-height: 1.35;
+  max-width: 52ch;
+  text-align: left;           /* texto legible, no centrado */
+}
+
+/* Demo */
+.pill--demo{
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+/* Header del login en columna */
+.mfLoginHeader{
+  display: flex;
+  flex-direction: column;
+  align-items: center;        /* 🔹 CENTRA TODO */
+  gap: 12px;
+}
