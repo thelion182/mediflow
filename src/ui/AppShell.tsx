@@ -140,7 +140,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </nav>
 
       {/* ── Main area ── */}
-      <main style={{ marginLeft: "var(--sidebar-w)", flex: 1, minHeight: "100vh", padding: "22px 26px", maxWidth: 1100 }}>
+      <main style={{ marginLeft: "var(--sidebar-w)", flex: 1, minHeight: "100vh", padding: "22px 26px" }}>
         {children}
       </main>
     </div>
@@ -164,8 +164,11 @@ const sidebarStyle: React.CSSProperties = {
 };
 
 const logoAreaStyle: React.CSSProperties = {
-  padding: "16px 16px 14px",
+  padding: "16px 14px 14px",
   borderBottom: "1px solid var(--border-2)",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
 };
 
 const logoImgStyle: React.CSSProperties = {
@@ -173,7 +176,7 @@ const logoImgStyle: React.CSSProperties = {
   width: "auto",
   display: "block",
   objectFit: "contain",
-  objectPosition: "left center",
+  objectPosition: "center",
 };
 
 function navItemStyle(active: boolean, rgb: string): React.CSSProperties {

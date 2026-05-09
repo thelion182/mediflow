@@ -574,6 +574,104 @@ function SeqCard({ c, st, medicoName, nav }: {
   );
 }
 
+// ── List row view ─────────────────────────────────────────────────────────
+function ConvRow({ c, medicoName, nav }: { c: any; medicoName: (id: string) => string; nav: (path: string) => void }) {
+  const confirmadas = (c.asignaciones || []).filter(
+    (a: any) => a.estado === "CONFIRMADA" || a.estado === "CUMPLIDA"
+  ).length;
+  const sec = computeSecuencialStatus(c);
+  const stats = buildInvStats(c.invitaciones || []);
+  const { rgb } = estadoColor(c.estado);
+  const isAlta = c.prioridad === "ALTA";
+
+  const fmtShort = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString("es-UY", { day: "2-digit", month: "2-digit" })
+      + " " + d.toLocaleTimeString("es-UY", { hour: "2-digit", minute: "2-digit" });
+  };
+
+  return (
+    <button
+      onClick={() => nav(`/dashboard/c/${c.id}`)}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        width: "100%",
+        textAlign: "left",
+        padding: 0,
+        border: "1px solid var(--border)",
+        borderLeft: `3px solid rgb(${isAlta ? "220,38,38" : rgb})`,
+        borderRadius: 10,
+        background: "var(--surface)",
+        cursor: "pointer",
+        overflow: "hidden",
+        transition: "background 0.12s, box-shadow 0.12s",
+        gap: 0,
+      }}
+      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "var(--surface-2)"; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "var(--surface)"; }}
+    >
+      {/* Sector + sede */}
+      <div style={{ flex: "0 0 200px", padding: "10px 14px", minWidth: 0 }}>
+        <div style={{ fontWeight: 700, fontSize: 13.5, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {c.sector}
+          {isAlta && <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 800, color: "rgb(220,38,38)", letterSpacing: "0.05em", verticalAlign: "middle" }}>URGENTE</span>}
+        </div>
+        {c.sede && <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.sede}</div>}
+      </div>
+
+      {/* Estado */}
+      <div style={{ flex: "0 0 110px", padding: "0 10px" }}>
+        <BadgeEstado estado={c.estado} />
+      </div>
+
+      {/* Fechas */}
+      <div style={{ flex: "1 1 0", padding: "0 10px", fontSize: 11.5, color: "var(--muted)", minWidth: 0 }}>
+        <div style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {fmtShort(c.inicio)} → {fmtShort(c.fin)}
+        </div>
+        <div style={{ fontSize: 11, color: "var(--subtle)", marginTop: 1 }}>Vence {fmtShort(c.vencimiento)}</div>
+      </div>
+
+      {/* Cupos */}
+      <div style={{ flex: "0 0 80px", padding: "0 10px", textAlign: "center" }}>
+        <span style={{ fontWeight: 700, fontSize: 13, color: confirmadas >= c.cupos ? "rgb(22,163,74)" : "var(--muted)" }}>
+          {confirmadas}/{c.cupos}
+        </span>
+        <div style={{ fontSize: 10, color: "var(--subtle)", marginTop: 1 }}>cupos</div>
+      </div>
+
+      {/* Inv stats */}
+      <div style={{ flex: "0 0 90px", padding: "0 10px", fontSize: 11, color: "var(--muted)", textAlign: "center" }}>
+        {stats.total > 0 && (
+          <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+            {stats.acepto   > 0 && <span style={{ color: "rgb(22,163,74)",  fontWeight: 700 }}>✓{stats.acepto}</span>}
+            {stats.rechazo  > 0 && <span style={{ color: "rgb(220,38,38)", fontWeight: 700 }}>✗{stats.rechazo}</span>}
+            {stats.pendiente> 0 && <span style={{ color: "rgb(21,101,192)", fontWeight: 700 }}>⏳{stats.pendiente}</span>}
+            {stats.espera   > 0 && <span style={{ color: "var(--subtle)" }}>…{stats.espera}</span>}
+          </div>
+        )}
+        <div style={{ fontSize: 10, color: "var(--subtle)", marginTop: 1 }}>{stats.total} inv</div>
+      </div>
+
+      {/* Canal + seq */}
+      <div style={{ flex: "0 0 120px", padding: "0 12px 0 6px", display: "flex", alignItems: "center", gap: 6 }}>
+        {(c.canales || stats.canales).slice(0, 2).map((canal: Canal) => (
+          <CanalTag key={canal} canal={canal} />
+        ))}
+        {sec && (
+          <span style={{
+            fontSize: 11, fontFamily: "ui-monospace, monospace", fontWeight: 700,
+            color: typeof sec.remainingSec === "number" && sec.remainingSec < 300 ? "rgb(220,38,38)" : `rgb(${rgb})`,
+            background: typeof sec.remainingSec === "number" && sec.remainingSec < 300 ? "rgba(220,38,38,0.10)" : `rgba(${rgb},0.10)`,
+            padding: "2px 6px", borderRadius: 5,
+          }}>⏱{typeof sec.remainingSec === "number" ? fmtMmSs(sec.remainingSec) : "—"}</span>
+        )}
+      </div>
+    </button>
+  );
+}
+
 // ── FILTROS (chips) ────────────────────────────────────────────────────────
 type FiltroEstado = "TODAS" | "ENVIADA" | "PARCIAL" | "CUBIERTA" | "VENCIDA" | "CANCELADA";
 const FILTROS: { key: FiltroEstado; label: string; rgb?: string }[] = [
@@ -585,12 +683,22 @@ const FILTROS: { key: FiltroEstado; label: string; rgb?: string }[] = [
   { key: "CANCELADA",label: "Canceladas",rgb: "100,116,139" },
 ];
 
+type ViewMode = "cards" | "list";
+
 // ── Main Dashboard ────────────────────────────────────────────────────────
 export function SuplenciasDashboard() {
   const nav = useNavigate();
   const [filtro, setFiltro] = useState<FiltroEstado>("TODAS");
+  const [viewMode, setViewMode] = useState<ViewMode>(() =>
+    (localStorage.getItem("mf.dash.view") as ViewMode) ?? "cards"
+  );
   const [tick, setTick]     = useState(0);
   const [uiTick, setUiTick] = useState(0);
+
+  function changeView(v: ViewMode) {
+    setViewMode(v);
+    localStorage.setItem("mf.dash.view", v);
+  }
 
   useEffect(() => {
     convocatoriaStore.seedIfEmpty();
@@ -720,8 +828,8 @@ export function SuplenciasDashboard() {
             <KpiCard label="Canceladas" count={kpis.CANCELADA} rgb="100,116,139" active={filtro === "CANCELADA"} onClick={() => setFiltro(f => f === "CANCELADA" ? "TODAS" : "CANCELADA")} />
           </div>
 
-          {/* Filter chips */}
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {/* Filter chips + view toggle */}
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
             {FILTROS.map(f => (
               <button
                 key={f.key}
@@ -746,6 +854,28 @@ export function SuplenciasDashboard() {
             <span style={{ fontSize: 12, color: "var(--subtle)", alignSelf: "center", marginLeft: 4 }}>
               {list.length} resultado{list.length !== 1 ? "s" : ""}
             </span>
+
+            {/* View toggle */}
+            <div style={{ marginLeft: "auto", display: "flex", gap: 2, background: "var(--surface-2)", borderRadius: 8, padding: 3, border: "1px solid var(--border-2)" }}>
+              {([
+                { key: "cards" as ViewMode, icon: "⊞", title: "Tarjetas" },
+                { key: "list"  as ViewMode, icon: "☰", title: "Lista"    },
+              ]).map(v => (
+                <button
+                  key={v.key}
+                  title={v.title}
+                  onClick={() => changeView(v.key)}
+                  style={{
+                    width: 28, height: 26, border: "none", borderRadius: 6,
+                    background: viewMode === v.key ? "var(--surface)" : "transparent",
+                    boxShadow: viewMode === v.key ? "0 1px 3px rgba(0,0,0,0.10)" : "none",
+                    color: viewMode === v.key ? "var(--blue)" : "var(--subtle)",
+                    fontSize: 14, cursor: "pointer", transition: "all 0.12s",
+                  }}
+                >{v.icon}</button>
+              ))}
+            </div>
+
           </div>
 
           {/* Convocatoria list */}
@@ -758,7 +888,33 @@ export function SuplenciasDashboard() {
               <div style={{ fontSize: 28, marginBottom: 8 }}>📋</div>
               <p style={{ margin: 0, fontSize: 13 }}>Sin convocatorias en este filtro</p>
             </div>
+          ) : viewMode === "list" ? (
+            /* ── List view ── */
+            <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
+              {/* List header */}
+              <div style={{
+                display: "flex", alignItems: "center",
+                padding: "7px 14px 7px 17px",
+                background: "var(--surface-2)", borderBottom: "1px solid var(--border-2)",
+                fontSize: 11, fontWeight: 700, color: "var(--subtle)", textTransform: "uppercase", letterSpacing: "0.06em",
+              }}>
+                <div style={{ flex: "0 0 200px" }}>Sector / Sede</div>
+                <div style={{ flex: "0 0 110px" }}>Estado</div>
+                <div style={{ flex: "1 1 0" }}>Fechas</div>
+                <div style={{ flex: "0 0 80px", textAlign: "center" }}>Cupos</div>
+                <div style={{ flex: "0 0 90px", textAlign: "center" }}>Inv.</div>
+                <div style={{ flex: "0 0 120px" }}>Canales</div>
+              </div>
+              <div style={{ display: "grid", gap: 0 }}>
+                {list.map((c, i) => (
+                  <div key={c.id} style={{ borderBottom: i < list.length - 1 ? "1px solid var(--border-2)" : "none" }}>
+                    <ConvRow c={c} medicoName={medicoName} nav={nav} />
+                  </div>
+                ))}
+              </div>
+            </div>
           ) : (
+            /* ── Cards view ── */
             <div style={{ display: "grid", gap: 10 }}>
               {list.map(c => (
                 <ConvCard key={c.id} c={c} medicoName={medicoName} nav={nav} />
