@@ -2,6 +2,7 @@
 import { AppShell } from "../../ui/AppShell";
 import { convocatoriaStore } from "../convocatorias/convocatoria.store";
 import { medicosStore } from "../admin/medicos.store";
+import { sedesStore } from "../admin/sedes.store";
 
 // ── Date helpers ──────────────────────────────────────────────────────────
 function todayStr() { return new Date().toISOString().slice(0, 10); }
@@ -281,11 +282,18 @@ function EditPanel({
   );
 }
 
+type Zona = "todos" | "montevideo" | "interior";
+
 // ── ParteDiario ───────────────────────────────────────────────────────────
 export function ParteDiario() {
   const [day, setDay] = useState(todayStr);
   const [tick, setTick] = useState(0);
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
+
+  // Filtros
+  const [zona, setZona]           = useState<Zona>("todos");
+  const [filtroSede, setFiltroSede]     = useState("");
+  const [filtroSector, setFiltroSector] = useState("");
 
   const allMedicos = useMemo(() => medicosStore.list().filter((m: any) => m.activo ?? true), [tick]);
   const medicosById = useMemo(() => {
@@ -297,10 +305,47 @@ export function ParteDiario() {
 
   const allConvs = useMemo(() => convocatoriaStore.list(), [tick]);
 
+  // Mapa nombre de sede → departamento (para zona Mvd/Interior)
+  const sedeDeptMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of sedesStore.list()) map.set(s.nombre, s.departamento ?? "");
+    return map;
+  }, [tick]);
+
+  function sedeZona(sedeNombre: string): "montevideo" | "interior" {
+    const depto = sedeDeptMap.get(sedeNombre) ?? "";
+    return depto.toLowerCase() === "montevideo" ? "montevideo" : "interior";
+  }
+
+  // Convocatorias del día sin filtros (para opciones disponibles)
+  const forDay = useMemo(() =>
+    allConvs.filter(c => overlapsDay(c, day) && c.estado !== "BORRADOR"),
+  [allConvs, day, tick]);
+
+  // Listas únicas para los dropdowns
+  const sedesDisponibles = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of forDay) if (c.sede) set.add(c.sede);
+    return Array.from(set).sort();
+  }, [forDay]);
+
+  const sectoresDisponibles = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of forDay) if (c.sector) set.add(c.sector);
+    return Array.from(set).sort();
+  }, [forDay]);
+
   const grouped = useMemo(() => {
-    const forDay = allConvs.filter(c => overlapsDay(c, day) && c.estado !== "BORRADOR");
+    const filtered = forDay.filter(c => {
+      const sedeNombre = c.sede || "(Sin sede)";
+      if (zona !== "todos" && sedeZona(sedeNombre) !== zona) return false;
+      if (filtroSede && sedeNombre !== filtroSede) return false;
+      if (filtroSector && c.sector !== filtroSector) return false;
+      return true;
+    });
+
     const result: Record<string, Record<string, any[]>> = {};
-    for (const c of forDay) {
+    for (const c of filtered) {
       const sede   = c.sede   || "(Sin sede)";
       const sector = c.sector || "(Sin sector)";
       if (!result[sede]) result[sede] = {};
@@ -308,7 +353,7 @@ export function ParteDiario() {
       result[sede][sector].push(c);
     }
     return result;
-  }, [day, tick]);
+  }, [forDay, zona, filtroSede, filtroSector]);
 
   const selectedConv = useMemo(
     () => selectedConvId ? allConvs.find(c => c.id === selectedConvId) ?? null : null,
@@ -364,6 +409,78 @@ export function ParteDiario() {
             background: "var(--surface)", fontSize: 14, cursor: "pointer", color: "var(--muted)",
           }}>↺</button>
         </div>
+      </div>
+
+      {/* ── Filtros ── */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap",
+        padding: "10px 14px", borderRadius: 12,
+        background: "var(--surface)", border: "1px solid var(--border)",
+        boxShadow: "var(--shadow-sm)",
+      }}>
+        {/* Zona Mvd/Interior */}
+        <div style={{ display: "flex", gap: 4 }}>
+          {([ ["todos", "Todos"], ["montevideo", "Montevideo"], ["interior", "Interior"] ] as [Zona, string][]).map(([z, label]) => (
+            <button key={z} onClick={() => { setZona(z); setFiltroSede(""); }}
+              style={{
+                padding: "5px 13px", borderRadius: 20, fontSize: 12.5, fontWeight: zona === z ? 700 : 500,
+                border: "1px solid var(--border)",
+                background: zona === z ? "var(--blue-tint-2)" : "var(--surface-2)",
+                color: zona === z ? "var(--blue)" : "var(--muted)",
+                cursor: "pointer", transition: "all 0.12s",
+              }}>{label}</button>
+          ))}
+        </div>
+
+        <div style={{ width: 1, height: 22, background: "var(--border-2)", flexShrink: 0 }} />
+
+        {/* Sede dropdown */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>Sede:</span>
+          <select
+            value={filtroSede}
+            onChange={e => setFiltroSede(e.target.value)}
+            style={{
+              padding: "5px 10px", borderRadius: 8, border: "1px solid var(--border)",
+              background: "var(--surface-2)", fontSize: 12.5, color: "var(--text)",
+              cursor: "pointer", minWidth: 140,
+            }}
+          >
+            <option value="">Todas</option>
+            {sedesDisponibles
+              .filter(s => zona === "todos" || sedeZona(s) === zona)
+              .map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+
+        {/* Sector dropdown */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>Sector:</span>
+          <select
+            value={filtroSector}
+            onChange={e => setFiltroSector(e.target.value)}
+            style={{
+              padding: "5px 10px", borderRadius: 8, border: "1px solid var(--border)",
+              background: "var(--surface-2)", fontSize: 12.5, color: "var(--text)",
+              cursor: "pointer", minWidth: 140,
+            }}
+          >
+            <option value="">Todos</option>
+            {sectoresDisponibles.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+
+        {/* Limpiar filtros */}
+        {(zona !== "todos" || filtroSede || filtroSector) && (
+          <button
+            onClick={() => { setZona("todos"); setFiltroSede(""); setFiltroSector(""); }}
+            style={{
+              marginLeft: "auto", padding: "5px 12px", borderRadius: 20, fontSize: 12,
+              border: "1px solid var(--border)", background: "transparent",
+              color: "var(--muted)", cursor: "pointer",
+            }}
+          >✕ Limpiar filtros</button>
+        )}
       </div>
 
       {/* ── Day summary bar ── */}
