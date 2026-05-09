@@ -35,10 +35,13 @@ export function LoginPage() {
     <div style={containerStyle}>
       <div style={cardStyle}>
 
-        {/* ── Header con logo ── */}
-        <div style={headerStyle}>
+        {/* ── Banda decorativa azul (sin logo) ── */}
+        <div style={headerBandStyle} />
+
+        {/* ── Logo centrado en zona blanca ── */}
+        <div style={logoAreaStyle}>
           <img src={lockupPng} alt="MediFlow" style={logoStyle} draggable={false} />
-          <p style={{ margin: "10px 0 0", fontSize: 13, color: "rgba(255,255,255,0.70)", letterSpacing: "0.01em" }}>
+          <p style={{ margin: "10px 0 0", fontSize: 13, color: "var(--muted)", letterSpacing: "0.01em" }}>
             Gestión de guardias y suplencias médicas
           </p>
         </div>
@@ -90,11 +93,11 @@ export function LoginPage() {
                   onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = "var(--surface-2)")}
                 >
                   <div style={{
-                    width: 6, height: 6, borderRadius: "50%",
+                    width: 8, height: 8, borderRadius: "50%",
                     background: `rgb(${acc.rgb})`, flexShrink: 0,
                   }} />
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: 12.5, color: "var(--text)" }}>{acc.id}</div>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: "var(--text)" }}>{acc.id}</div>
                     <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 1 }}>{acc.label}</div>
                   </div>
                 </button>
@@ -130,23 +133,26 @@ const cardStyle: React.CSSProperties = {
   border: "1px solid rgba(21,101,192,0.10)",
 };
 
-const headerStyle: React.CSSProperties = {
-  background: "linear-gradient(135deg, #1565C0 0%, #1976D2 60%, #0d8a85 100%)",
-  padding: "32px 28px 28px",
+const headerBandStyle: React.CSSProperties = {
+  height: 8,
+  background: "linear-gradient(90deg, #1565C0 0%, #1976D2 50%, #0d8a85 100%)",
+};
+
+const logoAreaStyle: React.CSSProperties = {
+  padding: "28px 28px 0",
   textAlign: "center",
 };
 
 const logoStyle: React.CSSProperties = {
-  height: 56,
+  height: 64,
   width: "auto",
   objectFit: "contain",
-  filter: "brightness(0) invert(1)",
   display: "block",
   margin: "0 auto",
 };
 
 const formBodyStyle: React.CSSProperties = {
-  padding: "24px 28px 28px",
+  padding: "20px 28px 28px",
 };
 
 const labelStyle: React.CSSProperties = {
