@@ -1,7 +1,7 @@
 import { storage } from "../../core/storage";
 import type { Medico, MedicoTipo } from "./medicos.types";
 
-const KEY = "mediflow.catalogo.medicos.v1";
+const KEY = "mediflow.catalogo.medicos.v2";
 
 const DEFAULT: Medico[] = [
   // ── TITULARES ─────────────────────────────────────────────────────────────
