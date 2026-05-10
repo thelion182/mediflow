@@ -3,106 +3,221 @@ import { authStore } from "../../auth/auth.store";
 import { convocatoriaStore } from "../convocatorias/convocatoria.store";
 import { AppShell } from "../../ui/AppShell";
 
-type InvitacionEstado =
-  | "EN_ESPERA"
-  | "ENVIADA"
-  | "VISTA"
-  | "ACEPTO"
-  | "RECHAZO"
-  | "VENCIDA"
-  | "SIN_RESPUESTA";
+type InvEstado = "EN_ESPERA" | "ENVIADA" | "VISTA" | "ACEPTO" | "RECHAZO" | "VENCIDA" | "SIN_RESPUESTA";
 
-const SUPLENCIAS_WHATSAPP = "+59899737934";
+const SUPLENCIAS_WA = "+59899737934";
 
-function waLink(phoneE164: string, text: string) {
-  const p = String(phoneE164 || "").replace(/[^\d+]/g, "");
-  const t = encodeURIComponent(text);
-  const digits = p.replace(/\D/g, "");
-  return `https://wa.me/${digits}?text=${t}`;
+function waLink(phone: string, text: string) {
+  return `https://wa.me/${phone.replace(/\D/g, "")}?text=${encodeURIComponent(text)}`;
 }
 
-function pillStyle(kind: "INFO" | "OK" | "WARN" | "BAD" | "MUTED") {
-  switch (kind) {
-    case "OK":
-      return { background: "rgba(16,185,129,.10)", borderColor: "rgba(16,185,129,.25)" };
-    case "WARN":
-      return { background: "rgba(245,158,11,.10)", borderColor: "rgba(245,158,11,.25)" };
-    case "BAD":
-      return { background: "rgba(239,68,68,.10)", borderColor: "rgba(239,68,68,.25)" };
-    case "INFO":
-      return { background: "rgba(59,130,246,.10)", borderColor: "rgba(59,130,246,.25)" };
-    default:
-      return { background: "rgba(148,163,184,.10)", borderColor: "rgba(148,163,184,.25)" };
-  }
+function fmtDt(iso: string) {
+  return new Date(iso).toLocaleString("es-UY", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleString("es-UY", { hour: "2-digit", minute: "2-digit" });
+}
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString("es-UY", { weekday: "long", day: "numeric", month: "long" });
 }
 
-type Badge = { label: string; kind: "INFO" | "OK" | "WARN" | "BAD" | "MUTED" };
+type BadgeKind = "OK" | "WARN" | "BAD" | "INFO" | "MUTED";
+const KIND_RGB: Record<BadgeKind, string> = {
+  OK:   "22,163,74",
+  WARN: "217,119,6",
+  BAD:  "220,38,38",
+  INFO: "21,101,192",
+  MUTED:"100,116,139",
+};
 
-function badgePrincipal(params: {
-  convEstado: string;
-  invEstado: InvitacionEstado;
-  isAssigned: boolean;
-  myAsgEstado?: string;
-}): Badge {
-  const { convEstado, invEstado, isAssigned, myAsgEstado } = params;
+function Badge({ label, kind }: { label: string; kind: BadgeKind }) {
+  const rgb = KIND_RGB[kind];
+  return (
+    <span style={{
+      padding: "3px 10px", borderRadius: 20, fontSize: 11.5, fontWeight: 700,
+      background: `rgba(${rgb},0.12)`, color: `rgb(${rgb})`,
+      border: `1px solid rgba(${rgb},0.25)`, whiteSpace: "nowrap",
+    }}>{label}</span>
+  );
+}
 
-  if (convEstado === "CANCELADA") return { label: "Cancelada", kind: "BAD" };
-  if (invEstado === "VENCIDA") return { label: "Vencida", kind: "WARN" };
-  if (invEstado === "SIN_RESPUESTA") return { label: "Sin cupo", kind: "MUTED" };
-
+function convBadge(convEstado: string, invEstado: InvEstado, isAssigned: boolean, asgEstado?: string): { label: string; kind: BadgeKind } {
+  if (convEstado === "CANCELADA")      return { label: "Cancelada",    kind: "BAD"  };
+  if (invEstado === "VENCIDA")         return { label: "Vencida",      kind: "WARN" };
+  if (invEstado === "SIN_RESPUESTA")   return { label: "Sin cupo",     kind: "MUTED"};
   if (isAssigned) {
-    if (myAsgEstado === "CUMPLIDA") return { label: "Cumplida", kind: "OK" };
-    if (myAsgEstado === "NO_CUMPLIDA") return { label: "No cumplida", kind: "BAD" };
-    return { label: "Confirmada", kind: "OK" };
+    if (asgEstado === "CUMPLIDA")      return { label: "Cumplida",     kind: "OK"   };
+    if (asgEstado === "NO_CUMPLIDA")   return { label: "No cumplida",  kind: "BAD"  };
+    return                                    { label: "Confirmada",   kind: "OK"   };
   }
-
-  if (invEstado === "RECHAZO") return { label: "Rechazada", kind: "BAD" };
-  if (invEstado === "ACEPTO") return { label: "Aceptada", kind: "OK" };
-
-  if (invEstado === "VISTA") return { label: "Vista", kind: "INFO" };
-  return { label: "Pendiente", kind: "INFO" };
+  if (invEstado === "RECHAZO")         return { label: "Rechazada",    kind: "BAD"  };
+  if (invEstado === "ACEPTO")          return { label: "Aceptada",     kind: "OK"   };
+  if (invEstado === "VISTA")           return { label: "Vista",        kind: "INFO" };
+  return                                      { label: "Pendiente",    kind: "INFO" };
 }
 
+// ── ConvCard para médico ──────────────────────────────────────────────────
+function MedicoCard({ item, showActions, onAceptar, onRechazar, onWA }: {
+  item: { c: any; inv: any; myAsg?: any; isAssigned: boolean };
+  showActions: boolean;
+  onAceptar: (id: string) => void;
+  onRechazar: (id: string) => void;
+  onWA: (id: string, accion: "ACEPTO" | "RECHAZO") => void;
+}) {
+  const c   = item.c;
+  const inv = item.inv as { estado: InvEstado; respondedAt?: string };
+  const { label, kind } = convBadge(c.estado, inv.estado, item.isAssigned, item.myAsg?.estado);
+  const rgb = KIND_RGB[kind];
+
+  const isPending = showActions && c.estado !== "CANCELADA";
+
+  return (
+    <div style={{
+      background: "var(--surface)",
+      border: `1px solid var(--border)`,
+      borderLeft: `4px solid rgb(${rgb})`,
+      borderRadius: 12,
+      overflow: "hidden",
+      boxShadow: isPending ? `0 2px 12px rgba(${rgb},0.12)` : "var(--shadow-sm)",
+      transition: "box-shadow 0.15s",
+    }}>
+      {/* Content */}
+      <div style={{ padding: "14px 16px" }}>
+        {/* Title row */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: "var(--text)", letterSpacing: "-0.01em" }}>
+              {c.sector}
+              {c.sede && <span style={{ fontWeight: 400, fontSize: 13, color: "var(--muted)", marginLeft: 6 }}>· {c.sede}</span>}
+            </div>
+            {c.prioridad === "ALTA" && (
+              <span style={{
+                display: "inline-block", marginTop: 4, fontSize: 10, fontWeight: 800,
+                color: "rgb(220,38,38)", background: "rgba(220,38,38,0.10)",
+                padding: "1px 7px", borderRadius: 4, letterSpacing: "0.05em",
+              }}>URGENTE</span>
+            )}
+          </div>
+          <Badge label={label} kind={kind} />
+        </div>
+
+        {/* Date row */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8, padding: "8px 10px",
+          background: "var(--surface-2)", borderRadius: 8, marginBottom: 10,
+        }}>
+          <span style={{ fontSize: 13, color: "var(--muted)" }}>
+            {fmtDate(c.inicio)}
+          </span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", marginLeft: "auto" }}>
+            {fmtTime(c.inicio)} → {fmtTime(c.fin)}
+          </span>
+        </div>
+
+        {/* Respondido */}
+        {inv.respondedAt && (
+          <p style={{ margin: "0 0 10px", fontSize: 12, color: "var(--muted)" }}>
+            Respondido: {fmtDt(inv.respondedAt)}
+          </p>
+        )}
+
+        {/* Cancel reason */}
+        {c.cancelReason && (
+          <p style={{ margin: "0 0 10px", fontSize: 12, color: "var(--danger)" }}>
+            {c.cancelReason}
+          </p>
+        )}
+
+        {/* Actions */}
+        {isPending && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              onClick={() => onAceptar(c.id)}
+              style={actionBtn("22,163,74")}
+              onMouseEnter={e => (e.currentTarget.style.background = "rgba(22,163,74,0.18)")}
+              onMouseLeave={e => (e.currentTarget.style.background = "rgba(22,163,74,0.10)")}
+            >✓ Aceptar</button>
+            <button
+              onClick={() => onRechazar(c.id)}
+              style={actionBtn("220,38,38")}
+              onMouseEnter={e => (e.currentTarget.style.background = "rgba(220,38,38,0.18)")}
+              onMouseLeave={e => (e.currentTarget.style.background = "rgba(220,38,38,0.10)")}
+            >✕ Rechazar</button>
+            <button
+              onClick={() => onWA(c.id, "ACEPTO")}
+              style={actionBtn("37,211,102")}
+              onMouseEnter={e => (e.currentTarget.style.background = "rgba(37,211,102,0.18)")}
+              onMouseLeave={e => (e.currentTarget.style.background = "rgba(37,211,102,0.10)")}
+            >WhatsApp: Acepto</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function actionBtn(rgb: string): React.CSSProperties {
+  return {
+    padding: "7px 14px", borderRadius: 9, fontSize: 12.5, fontWeight: 700, cursor: "pointer",
+    border: `1px solid rgba(${rgb},0.30)`, background: `rgba(${rgb},0.10)`,
+    color: `rgb(${rgb})`, transition: "background 0.12s",
+  };
+}
+
+// ── Sección con título y conteo ───────────────────────────────────────────
+function Section({ title, count, rgb, children, empty }: {
+  title: string; count: number; rgb: string;
+  children: React.ReactNode; empty: string;
+}) {
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <div style={{ width: 8, height: 8, borderRadius: "50%", background: `rgb(${rgb})` }} />
+        <span style={{ fontWeight: 700, fontSize: 14, color: "var(--text)" }}>{title}</span>
+        <span style={{
+          padding: "1px 8px", borderRadius: 20, fontSize: 12, fontWeight: 700,
+          background: `rgba(${rgb},0.10)`, color: `rgb(${rgb})`,
+        }}>{count}</span>
+      </div>
+      {count === 0
+        ? <p style={{ fontSize: 13, color: "var(--muted)", padding: "12px 0" }}>{empty}</p>
+        : <div style={{ display: "grid", gap: 10 }}>{children}</div>
+      }
+    </div>
+  );
+}
+
+// ── MedicoHome ────────────────────────────────────────────────────────────
 export function MedicoHome() {
   const session = authStore.getSession()!;
   const [tick, setTick] = useState(0);
-
-  // Refs para detectar visibilidad real de cada card pendiente
-  const cardRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
-  const seenTimers = useRef<Map<string, number>>(new Map());
+  const cardRefs    = useRef<Map<string, HTMLDivElement | null>>(new Map());
+  const seenTimers  = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     convocatoriaStore.seedIfEmpty();
     setTick(t => t + 1);
-
     const onVis = () => setTick(t => t + 1);
     document.addEventListener("visibilitychange", onVis);
-
     return () => {
       document.removeEventListener("visibilitychange", onVis);
-      // limpiar timers
       for (const t of seenTimers.current.values()) window.clearTimeout(t);
-      seenTimers.current.clear();
     };
   }, []);
 
-  // ✅ Auto-refresh suave para que "avance" el secuencial aunque nadie toque nada.
-  // Como tu store hace autoAdvance al hacer list(), con esto ya alcanza en MVP.
   useEffect(() => {
-    const everyMs = 30_000; // 30s: suficiente para timeouts de 60 min sin cargar de más
     const iv = window.setInterval(() => {
       if (document.visibilityState === "visible") setTick(t => t + 1);
-    }, everyMs);
+    }, 30_000);
     return () => window.clearInterval(iv);
   }, []);
 
   const all = useMemo(() => convocatoriaStore.list(), [tick]);
 
-  // Match robusto por userId/cedula/funcionario
   const mine = useMemo(() => {
-    const myKey = String(session.userId || "").trim();
-    const myNum = myKey.replace(/\D/g, "");
-    const myCi = String((session as any).cedula || "").replace(/\D/g, "");
+    const myKey  = String(session.userId || "").trim();
+    const myNum  = myKey.replace(/\D/g, "");
+    const myCi   = String((session as any).cedula     || "").replace(/\D/g, "");
     const myFunc = String((session as any).funcionario || "").replace(/\D/g, "");
 
     const matchesMe = (medicoId: string) => {
@@ -113,316 +228,141 @@ export function MedicoHome() {
       return !!aNum && (aNum === myNum || (myCi && aNum === myCi) || (myFunc && aNum === myFunc));
     };
 
-    return all
-      .map(c => {
-        const inv = (c.invitaciones || []).find((i: any) => matchesMe(i.medicoId));
-        if (!inv) return null;
-
-        const myAsg = (c.asignaciones || []).find((a: any) => matchesMe(a.medicoId));
-        const isAssigned = !!myAsg;
-
-        return { c, inv, myAsg, isAssigned };
-      })
-      .filter(Boolean) as Array<{ c: any; inv: any; myAsg?: any; isAssigned: boolean }>;
+    return all.map(c => {
+      const inv = (c.invitaciones || []).find((i: any) => matchesMe(i.medicoId));
+      if (!inv) return null;
+      const myAsg    = (c.asignaciones || []).find((a: any) => matchesMe(a.medicoId));
+      return { c, inv, myAsg, isAssigned: !!myAsg };
+    }).filter(Boolean) as Array<{ c: any; inv: any; myAsg?: any; isAssigned: boolean }>;
   }, [all, session.userId]);
 
-  const pendientes = useMemo(() => {
-    return mine.filter(
-      x => (x.inv.estado === "ENVIADA" || x.inv.estado === "VISTA") && x.c.estado !== "CANCELADA"
-    );
-  }, [mine]);
+  const pendientes  = useMemo(() => mine.filter(x => (x.inv.estado === "ENVIADA" || x.inv.estado === "VISTA") && x.c.estado !== "CANCELADA"), [mine]);
+  const confirmadas = useMemo(() => mine.filter(x => x.c.estado !== "CANCELADA" && x.isAssigned), [mine]);
+  const rechazadas  = useMemo(() => mine.filter(x => x.c.estado !== "CANCELADA" && x.inv.estado === "RECHAZO"), [mine]);
+  const noDisp      = useMemo(() => mine.filter(x => x.c.estado === "CANCELADA" || x.inv.estado === "VENCIDA" || x.inv.estado === "SIN_RESPUESTA"), [mine]);
 
-  const confirmadas = useMemo(() => {
-    return mine.filter(x => x.c.estado !== "CANCELADA" && x.isAssigned);
-  }, [mine]);
-
-  const rechazadas = useMemo(() => {
-    return mine.filter(x => x.c.estado !== "CANCELADA" && x.inv.estado === "RECHAZO");
-  }, [mine]);
-
-  const noDisponibles = useMemo(() => {
-    return mine.filter(
-      x =>
-        x.c.estado === "CANCELADA" ||
-        x.inv.estado === "VENCIDA" ||
-        x.inv.estado === "SIN_RESPUESTA"
-    );
-  }, [mine]);
-
-  // ✅ AUTO “VISTA” SOLO SI ESTUVO VISIBLE 2s
-  // - Si está ENVIADA y el card entra en viewport: arranca timer 2000ms.
-  // - Si sale antes, se cancela.
-  // - Si se marca vista, el store en secuencial ya valida que solo el “activo” pueda.
-  const pendientesKey = useMemo(() => {
-    // clave estable para rearmar observer si cambia la lista/estado
-    return pendientes.map(x => `${x.c.id}:${x.inv.estado}`).join("|");
-  }, [pendientes]);
-
+  // Auto-mark vista
+  const pendientesKey = pendientes.map(x => `${x.c.id}:${x.inv.estado}`).join("|");
   useEffect(() => {
-    // limpiar timers previos
     for (const t of seenTimers.current.values()) window.clearTimeout(t);
     seenTimers.current.clear();
-
     if (!pendientes.length) return;
-
-    const eligible = new Set(
-      pendientes.filter(x => x.inv.estado === "ENVIADA").map(x => x.c.id)
-    );
+    const eligible = new Set(pendientes.filter(x => x.inv.estado === "ENVIADA").map(x => x.c.id));
     if (!eligible.size) return;
-
-    const obs = new IntersectionObserver(
-      entries => {
-        for (const e of entries) {
-          const el = e.target as HTMLDivElement;
-          const convId = el.dataset.convid || "";
-          if (!convId) continue;
-
-          // Solo ENVIADA es candidata a auto-vista
-          if (!eligible.has(convId)) continue;
-
-          const existing = seenTimers.current.get(convId);
-          if (e.isIntersecting && e.intersectionRatio >= 0.6) {
-            // si ya hay timer, no duplicar
-            if (existing) continue;
-
-            const t = window.setTimeout(() => {
-              // condiciones de seguridad: tab visible
-              if (document.visibilityState !== "visible") return;
-
-              convocatoriaStore.markSeen(convId, session.userId);
-              setTick(x => x + 1);
-
-              // liberar timer
-              seenTimers.current.delete(convId);
-            }, 2000);
-
-            seenTimers.current.set(convId, t);
-          } else {
-            // si salió de vista antes de 2s, cancelamos
-            if (existing) {
-              window.clearTimeout(existing);
-              seenTimers.current.delete(convId);
-            }
-          }
+    const obs = new IntersectionObserver(entries => {
+      for (const e of entries) {
+        const convId = (e.target as HTMLElement).dataset.convid || "";
+        if (!eligible.has(convId)) continue;
+        if (e.isIntersecting && e.intersectionRatio >= 0.6) {
+          if (seenTimers.current.has(convId)) continue;
+          const t = window.setTimeout(() => {
+            if (document.visibilityState !== "visible") return;
+            convocatoriaStore.markSeen(convId, session.userId);
+            setTick(x => x + 1);
+            seenTimers.current.delete(convId);
+          }, 2000);
+          seenTimers.current.set(convId, t);
+        } else {
+          const t = seenTimers.current.get(convId);
+          if (t) { window.clearTimeout(t); seenTimers.current.delete(convId); }
         }
-      },
-      {
-        threshold: [0.0, 0.6, 1.0],
-        root: null
       }
-    );
-
-    // observar nodos actuales
+    }, { threshold: [0.0, 0.6, 1.0] });
     for (const convId of eligible) {
       const node = cardRefs.current.get(convId);
       if (node) obs.observe(node);
     }
-
-    return () => {
-      obs.disconnect();
-      for (const t of seenTimers.current.values()) window.clearTimeout(t);
-      seenTimers.current.clear();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => { obs.disconnect(); for (const t of seenTimers.current.values()) window.clearTimeout(t); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.userId, pendientesKey]);
 
-  function aceptar(convId: string) {
-    convocatoriaStore.respond(convId, session.userId, "ACEPTO");
-    setTick(t => t + 1);
-  }
-
-  function rechazar(convId: string) {
-    convocatoriaStore.respond(convId, session.userId, "RECHAZO");
-    setTick(t => t + 1);
-  }
-
-  function whatsappSuplencias(convId: string, accion: "ACEPTO" | "RECHAZO") {
-    const msg =
-      `Hola Suplencias, soy ${session.displayName} (${session.userId}). ` +
-      `Respecto a la convocatoria ${convId}: ${accion === "ACEPTO" ? "ACEPTO" : "RECHAZO"}. ` +
-      `Lo registro también en Mediflow.`;
-    window.open(waLink(SUPLENCIAS_WHATSAPP, msg), "_blank");
-  }
-
-  function Card({ item, showActions }: { item: any; showActions: boolean }) {
-    const c = item.c;
-    const inv = item.inv as { estado: InvitacionEstado; respondedAt?: string };
-    const myAsg = item.myAsg as any | undefined;
-
-    const badge = badgePrincipal({
-      convEstado: c.estado,
-      invEstado: inv.estado,
-      isAssigned: !!item.isAssigned,
-      myAsgEstado: myAsg?.estado
-    });
-
-    const secondary =
-      c.estado === "CANCELADA"
-        ? c.cancelReason
-          ? `Motivo: ${c.cancelReason}`
-          : "Esta convocatoria fue cancelada."
-        : c.estado === "CUBIERTA"
-        ? "Cupos completos."
-        : "";
-
-    return (
-      <div className="btnGhost" style={{ padding: 12, textAlign: "left" }}>
-        <div className="row" style={{ gap: 10, flexWrap: "wrap", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-            <b>
-              {c.sector}
-              {c.sede ? ` · ${c.sede}` : ""}
-            </b>
-            <span className="pill" style={pillStyle(badge.kind)}>
-              {badge.label}
-            </span>
-          </div>
-        </div>
-
-        <div className="sub" style={{ marginTop: 6 }}>
-          Turno: {new Date(c.inicio).toLocaleString()} → {new Date(c.fin).toLocaleString()}
-        </div>
-
-        {inv.respondedAt ? (
-          <div className="sub" style={{ marginTop: 4 }}>
-            Respondido: {new Date(inv.respondedAt).toLocaleString()}
-          </div>
-        ) : null}
-
-        {secondary ? (
-          <div className="sub" style={{ marginTop: 6 }}>
-            {secondary}
-          </div>
-        ) : null}
-
-        {c.estado === "CANCELADA" ? null : showActions ? (
-          <div className="row" style={{ marginTop: 10, gap: 10, flexWrap: "wrap" }}>
-            <button
-              className="btnGhost"
-              onClick={() => rechazar(c.id)}
-              style={{ borderColor: "rgba(239,68,68,.25)" }}
-            >
-              Rechazar
-            </button>
-
-            <button
-              className="btnGhost"
-              onClick={() => aceptar(c.id)}
-              style={{ borderColor: "rgba(22,163,74,.25)" }}
-            >
-              Aceptar
-            </button>
-
-            <button className="btnGhost" onClick={() => whatsappSuplencias(c.id, "ACEPTO")}>
-              WhatsApp: Acepto
-            </button>
-
-            <button
-              className="btnGhost"
-              onClick={() => whatsappSuplencias(c.id, "RECHAZO")}
-              style={{ borderColor: "rgba(239,68,68,.25)" }}
-            >
-              WhatsApp: Rechazo
-            </button>
-          </div>
-        ) : null}
-      </div>
-    );
+  function aceptar(convId: string)  { convocatoriaStore.respond(convId, session.userId, "ACEPTO");  setTick(t => t + 1); }
+  function rechazar(convId: string) { convocatoriaStore.respond(convId, session.userId, "RECHAZO"); setTick(t => t + 1); }
+  function onWA(convId: string, accion: "ACEPTO" | "RECHAZO") {
+    const msg = `Hola Suplencias, soy ${session.displayName} (${session.userId}). Respecto a la convocatoria ${convId}: ${accion}. Lo registro también en Mediflow.`;
+    window.open(waLink(SUPLENCIAS_WA, msg), "_blank");
   }
 
   return (
     <AppShell>
-      <div style={{ maxWidth: 600, margin: "0 auto" }}>
+      <div style={{ maxWidth: 680, margin: "0 auto" }}>
+
         {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 22, flexWrap: "wrap", gap: 12 }}>
           <div>
             <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, letterSpacing: "-0.03em" }}>Mis Convocatorias</h1>
-            <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--muted)" }}>Hola, {session.displayName}</p>
+            <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--muted)" }}>Bienvenido/a, <b>{session.displayName}</b></p>
           </div>
-          <button className="btnGhost" onClick={() => setTick(t => t + 1)}>Refrescar</button>
+          <button onClick={() => setTick(t => t + 1)} style={{
+            padding: "8px 16px", borderRadius: 10, border: "1px solid var(--border)",
+            background: "var(--surface)", color: "var(--muted)", fontSize: 13, cursor: "pointer",
+          }}>↺ Actualizar</button>
         </div>
 
-        <div className="grid" style={{ gridTemplateColumns: "1fr" }}>
-          <div className="panel">
-            <h3 style={{ margin: 0, fontSize: 14 }}>Pendientes</h3>
-            {pendientes.length === 0 ? (
-              <p className="sub" style={{ marginTop: 10 }}>
-                No tenés convocatorias pendientes.
-              </p>
-            ) : (
-              <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-                {pendientes.map(item => (
-                  <div
-                    key={item.c.id}
-                    data-convid={item.c.id}
-                    ref={(el) => cardRefs.current.set(item.c.id, el)}
-                  >
-                    <Card item={item} showActions />
-                  </div>
-                ))}
-              </div>
-            )}
-            {pendientes.length ? (
-              <div className="sub" style={{ marginTop: 10 }}>
-                Nota: una convocatoria se marca como “Vista” automáticamente si permanece visible 2 segundos.
-              </div>
-            ) : null}
-          </div>
+        {/* KPI chips */}
+        <div style={{ display: "flex", gap: 10, marginBottom: 24, flexWrap: "wrap" }}>
+          {[
+            { label: "Pendientes",   count: pendientes.length,  rgb: "21,101,192"  },
+            { label: "Confirmadas",  count: confirmadas.length,  rgb: "22,163,74"   },
+            { label: "Rechazadas",   count: rechazadas.length,   rgb: "220,38,38"   },
+            { label: "Sin cupo",     count: noDisp.length,       rgb: "100,116,139" },
+          ].map(k => (
+            <div key={k.label} style={{
+              display: "flex", alignItems: "center", gap: 8,
+              padding: "8px 14px", borderRadius: 10,
+              background: "var(--surface)", border: `1px solid var(--border)`,
+              boxShadow: "var(--shadow-sm)",
+            }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: `rgb(${k.rgb})` }} />
+              <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{k.count}</span>
+              <span style={{ fontSize: 12, color: "var(--muted)" }}>{k.label}</span>
+            </div>
+          ))}
+        </div>
 
-          <div className="panel">
-            <h3 style={{ margin: 0, fontSize: 14 }}>Confirmadas</h3>
-            {confirmadas.length === 0 ? (
-              <p className="sub" style={{ marginTop: 10 }}>
-                No tenés guardias confirmadas.
-              </p>
-            ) : (
-              <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-                {confirmadas.map(item => (
-                  <Card key={item.c.id} item={item} showActions={false} />
-                ))}
+        {/* Secciones */}
+        <div style={{ display: "grid", gap: 28 }}>
+
+          <Section title="Pendientes de respuesta" count={pendientes.length} rgb="21,101,192"
+            empty="No tenés convocatorias pendientes.">
+            {pendientes.map(item => (
+              <div key={item.c.id} data-convid={item.c.id} ref={el => cardRefs.current.set(item.c.id, el)}>
+                <MedicoCard item={item} showActions onAceptar={aceptar} onRechazar={rechazar} onWA={onWA} />
               </div>
-            )}
-          </div>
+            ))}
+          </Section>
 
-          <div className="panel">
-            <h3 style={{ margin: 0, fontSize: 14 }}>Rechazadas</h3>
-            {rechazadas.length === 0 ? (
-              <p className="sub" style={{ marginTop: 10 }}>
-                No rechazaste convocatorias.
-              </p>
-            ) : (
-              <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-                {rechazadas.map(item => (
-                  <Card key={item.c.id} item={item} showActions={false} />
-                ))}
-              </div>
-            )}
-          </div>
+          <Section title="Confirmadas" count={confirmadas.length} rgb="22,163,74"
+            empty="No tenés guardias confirmadas.">
+            {confirmadas.map(item => (
+              <MedicoCard key={item.c.id} item={item} showActions={false} onAceptar={aceptar} onRechazar={rechazar} onWA={onWA} />
+            ))}
+          </Section>
 
-          <div className="panel">
-            <h3 style={{ margin: 0, fontSize: 14 }}>No disponibles</h3>
-            <p className="sub" style={{ marginTop: 6 }}>
-              Canceladas, vencidas o sin cupo. No requieren acción.
-            </p>
+          <Section title="Rechazadas" count={rechazadas.length} rgb="220,38,38"
+            empty="No rechazaste convocatorias.">
+            {rechazadas.map(item => (
+              <MedicoCard key={item.c.id} item={item} showActions={false} onAceptar={aceptar} onRechazar={rechazar} onWA={onWA} />
+            ))}
+          </Section>
 
-            {noDisponibles.length === 0 ? (
-              <p className="sub" style={{ marginTop: 10 }}>
-                No tenés convocatorias en esta categoría.
-              </p>
-            ) : (
-              <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-                {noDisponibles.map(item => (
-                  <Card key={item.c.id} item={item} showActions={false} />
-                ))}
-              </div>
-            )}
-          </div>
+          <Section title="No disponibles" count={noDisp.length} rgb="100,116,139"
+            empty="Sin convocatorias canceladas o vencidas.">
+            {noDisp.map(item => (
+              <MedicoCard key={item.c.id} item={item} showActions={false} onAceptar={aceptar} onRechazar={rechazar} onWA={onWA} />
+            ))}
+          </Section>
 
-          <div className="panel">
-            <p className="sub" style={{ margin: 0 }}>
-              WhatsApp es canal secundario para avisos rápidos. La respuesta oficial queda registrada en Mediflow.
-            </p>
-          </div>
+        </div>
+
+        {/* Nota */}
+        <div style={{
+          marginTop: 28, padding: "12px 16px", borderRadius: 10,
+          background: "var(--surface)", border: "1px solid var(--border-2)",
+          fontSize: 12, color: "var(--muted)", lineHeight: 1.6,
+        }}>
+          WhatsApp es canal secundario. La respuesta oficial queda registrada en Mediflow.
+          Una convocatoria se marca como "Vista" automáticamente si permanece visible 2 segundos.
         </div>
       </div>
     </AppShell>

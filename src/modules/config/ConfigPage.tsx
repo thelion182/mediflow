@@ -1,10 +1,12 @@
 import React, { useState } from "react";
 import { AppShell } from "../../ui/AppShell";
 import { configStore } from "./config.store";
+import { authStore } from "../../auth/auth.store";
+import { UsersAdmin } from "./UsersAdmin";
 import type { SystemConfig, Canal, WhatsAppProvider, SmsProvider, EmailProvider, FotosConfig } from "./config.types";
 import { CANAL_META } from "./config.types";
 
-type Tab = "org" | "canales" | "defaults" | "scoring";
+type Tab = "usuarios" | "org" | "canales" | "defaults" | "scoring";
 
 // ── Toggle ────────────────────────────────────────────────────────────────
 function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
@@ -99,7 +101,8 @@ function CanalHeader({ canal, enabled, onToggle, rgb }: { canal: string; enabled
 
 // ── ConfigPage ────────────────────────────────────────────────────────────
 export function ConfigPage() {
-  const [tab, setTab] = useState<Tab>("canales");
+  const [tab, setTab] = useState<Tab>("usuarios");
+  const session = authStore.getSession();
   const [cfg, setCfg] = useState<SystemConfig>(() => configStore.get());
   const [saved, setSaved] = useState(false);
 
@@ -146,6 +149,7 @@ export function ConfigPage() {
   }
 
   const tabs: { id: Tab; label: string }[] = [
+    { id: "usuarios", label: "Usuarios" },
     { id: "canales",  label: "Canales" },
     { id: "defaults", label: "Convocatorias" },
     { id: "scoring",  label: "Scoring" },
@@ -192,6 +196,11 @@ export function ConfigPage() {
           </button>
         ))}
       </div>
+
+      {/* ── Tab: Usuarios ─────────────────────────────────────────────────── */}
+      {tab === "usuarios" && (
+        <UsersAdmin currentRole={session?.role ?? "ADMIN"} />
+      )}
 
       {/* ── Tab: Canales ──────────────────────────────────────────────────── */}
       {tab === "canales" && (

@@ -1,6 +1,7 @@
 import { storage } from "../core/storage";
 import type { Role, User } from "./auth.types";
 import { medicosStore } from "../modules/admin/medicos.store";
+import { usersStore } from "../modules/config/users.store";
 
 const KEY = "mediflow.session";
 
@@ -53,6 +54,14 @@ export const authStore = {
 
   clear() {
     storage.remove(KEY);
+  },
+
+  loginWithPassword(input: string, password: string): { ok: true; user: User } | { ok: false; error: string } {
+    const res = this.loginByIdOrUserId(input);
+    if (!res.ok) return res;
+    if (!usersStore.checkPassword(res.user.userId, password))
+      return { ok: false, error: "Contraseña incorrecta." };
+    return res;
   },
 
   loginByIdOrUserId(input: string): { ok: true; user: User } | { ok: false; error: string } {
