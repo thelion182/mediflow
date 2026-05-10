@@ -576,7 +576,10 @@ function SeqCard({ c, st, medicoName, nav }: {
 }
 
 // ── List row view ─────────────────────────────────────────────────────────
-function ConvRow({ c, medicoName, nav }: { c: any; medicoName: (id: string) => string; nav: (path: string) => void }) {
+function ConvRow({ c, medicoName, nav, deleteAction }: {
+  c: any; medicoName: (id: string) => string; nav: (path: string) => void;
+  deleteAction?: React.ReactNode;
+}) {
   const confirmadas = (c.asignaciones || []).filter(
     (a: any) => a.estado === "CONFIRMADA" || a.estado === "CUMPLIDA"
   ).length;
@@ -656,7 +659,7 @@ function ConvRow({ c, medicoName, nav }: { c: any; medicoName: (id: string) => s
       </div>
 
       {/* Canal + seq */}
-      <div style={{ flex: "0 0 120px", padding: "0 12px 0 6px", display: "flex", alignItems: "center", gap: 6 }}>
+      <div style={{ flex: "0 0 120px", padding: "0 6px 0 6px", display: "flex", alignItems: "center", gap: 6 }}>
         {(c.canales || stats.canales).slice(0, 2).map((canal: Canal) => (
           <CanalTag key={canal} canal={canal} />
         ))}
@@ -668,6 +671,12 @@ function ConvRow({ c, medicoName, nav }: { c: any; medicoName: (id: string) => s
             padding: "2px 6px", borderRadius: 5,
           }}>⏱{typeof sec.remainingSec === "number" ? fmtMmSs(sec.remainingSec) : "—"}</span>
         )}
+      </div>
+
+      {/* Acción de borrado — columna fija al final */}
+      <div style={{ flex: "0 0 36px", display: "flex", alignItems: "center", justifyContent: "center" }}
+        onClick={e => e.stopPropagation()}>
+        {deleteAction}
       </div>
     </button>
   );
@@ -920,25 +929,32 @@ export function SuplenciasDashboard() {
                 <div style={{ flex: "0 0 80px", textAlign: "center" }}>Cupos</div>
                 <div style={{ flex: "0 0 90px", textAlign: "center" }}>Inv.</div>
                 <div style={{ flex: "0 0 120px" }}>Canales</div>
+                {isSuperAdmin && <div style={{ flex: "0 0 36px" }} />}
               </div>
               <div style={{ display: "grid", gap: 0 }}>
                 {list.map((c, i) => (
                   <div
                     key={c.id}
-                    style={{ position: "relative", borderBottom: i < list.length - 1 ? "1px solid var(--border-2)" : "none" }}
+                    style={{ borderBottom: i < list.length - 1 ? "1px solid var(--border-2)" : "none" }}
                     onMouseEnter={() => setHoveredId(c.id)}
                     onMouseLeave={() => setHoveredId(null)}
                   >
-                    <ConvRow c={c} medicoName={medicoName} nav={nav} />
-                    {isSuperAdmin && (
-                      <button
-                        onClick={e => { e.stopPropagation(); handleDelete(c); }}
-                        title="Borrar permanentemente (Solo Super Admin)"
-                        style={{ ...deleteOverlayStyle, opacity: hoveredId === c.id ? 1 : 0, pointerEvents: hoveredId === c.id ? "auto" : "none" }}
-                        onMouseEnter={e => (e.currentTarget.style.background = "rgba(220,38,38,0.18)")}
-                        onMouseLeave={e => (e.currentTarget.style.background = "rgba(220,38,38,0.07)")}
-                      >🗑</button>
-                    )}
+                    <ConvRow
+                      c={c} medicoName={medicoName} nav={nav}
+                      deleteAction={isSuperAdmin ? (
+                        <button
+                          onClick={e => { e.stopPropagation(); handleDelete(c); }}
+                          title="Borrar permanentemente"
+                          style={{
+                            ...rowDeleteBtnStyle,
+                            opacity: hoveredId === c.id ? 1 : 0,
+                            pointerEvents: hoveredId === c.id ? "auto" : "none",
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.background = "rgba(220,38,38,0.18)")}
+                          onMouseLeave={e => (e.currentTarget.style.background = "rgba(220,38,38,0.07)")}
+                        >🗑</button>
+                      ) : undefined}
+                    />
                   </div>
                 ))}
               </div>
@@ -978,6 +994,7 @@ export function SuplenciasDashboard() {
   );
 }
 
+// Botón de borrado para cards (overlay absoluto top-right, sin solapar contenido)
 const deleteOverlayStyle: React.CSSProperties = {
   position: "absolute",
   top: 8,
@@ -992,5 +1009,18 @@ const deleteOverlayStyle: React.CSSProperties = {
   cursor: "pointer",
   lineHeight: 1,
   opacity: 0,
+  transition: "opacity 0.15s, background 0.12s",
+};
+
+// Botón de borrado para filas de lista (columna propia, no overlay)
+const rowDeleteBtnStyle: React.CSSProperties = {
+  padding: "5px 7px",
+  borderRadius: 7,
+  border: "1px solid rgba(220,38,38,0.30)",
+  background: "rgba(220,38,38,0.07)",
+  color: "rgb(220,38,38)",
+  fontSize: 13,
+  cursor: "pointer",
+  lineHeight: 1,
   transition: "opacity 0.15s, background 0.12s",
 };
