@@ -169,9 +169,61 @@ function autoAdvanceAll(raw: Convocatoria[]) {
   return out;
 }
 
+function autoRenewIfNeeded(raw: Convocatoria[]): { list: Convocatoria[]; changed: boolean } {
+  let changed = false;
+  const now = Date.now();
+
+  const out = raw.map(c => {
+    if (!c.autoRenew) return c;
+    if (c.estado === "CANCELADA") return c;
+
+    const tentativo = computeEstado(c);
+    if (tentativo !== "VENCIDA") return c;
+
+    const count = c.autoRenewCount ?? 0;
+    const maxCount = c.autoRenewMaxCount ?? 3;
+    if (count >= maxCount) return c;
+
+    const renewMins = c.autoRenewMinutes ?? 60;
+    c = {
+      ...c,
+      vencimiento: new Date(now + renewMins * 60_000).toISOString(),
+      autoRenewCount: count + 1,
+      updatedAt: new Date(now).toISOString(),
+    };
+
+    // SECUENCIAL: si no quedan invitaciones activas o en espera, resetear y reenviar
+    if (isSequential(c)) {
+      const hasActive = c.invitaciones.some(
+        i => i.estado === "ENVIADA" || i.estado === "VISTA" || i.estado === "EN_ESPERA"
+      );
+      if (!hasActive) {
+        const invs: Invitacion[] = c.invitaciones.map(inv =>
+          inv.estado === "ACEPTO"
+            ? inv
+            : { ...inv, estado: "EN_ESPERA" as const, sentAt: undefined, seenAt: undefined, respondedAt: undefined }
+        );
+        const firstWaiting = invs.findIndex(i => i.estado === "EN_ESPERA");
+        if (firstWaiting >= 0) {
+          invs[firstWaiting] = { ...invs[firstWaiting], estado: "ENVIADA", sentAt: new Date(now).toISOString() };
+        }
+        c = { ...c, invitaciones: invs };
+      }
+    }
+
+    c = { ...c, estado: computeEstado(c) };
+    changed = true;
+    return c;
+  });
+
+  return { list: out, changed };
+}
+
 function hydrate(list: Convocatoria[]) {
   const advanced = autoAdvanceAll(list);
-  return advanced.map(c => ({ ...c, estado: computeEstado(c) }));
+  const { list: renewed, changed: renewChanged } = autoRenewIfNeeded(advanced);
+  if (renewChanged) storage.set(KEY, renewed);
+  return renewed.map(c => ({ ...c, estado: computeEstado(c) }));
 }
 
 function sortDestinatariosByPrioridad(destinatarios: string[]) {
@@ -252,16 +304,12 @@ export const convocatoriaStore = {
 
     modoEnvio?: "MASIVO" | "SECUENCIAL";
     timeouts?: { sinVerMin: number; sinResponderMin: number };
-
-    /**
-     * ✅ NUEVO:
-     * - false/undefined: el store reordena por prioridad del catálogo (comportamiento viejo)
-     * - true: respeta EXACTO el orden que mandó la UI (tu orden "real" por filtro/override)
-     */
     keepOrder?: boolean;
-
-    /** Canales habilitados para esta convocatoria (ej: ["APP","WHATSAPP"]). El primero es el canal principal. */
     canales?: Canal[];
+    autoRenew?: boolean;
+    autoRenewMinutes?: number;
+    autoRenewMaxCount?: number;
+    prioMode?: "SCORING" | "MANUAL";
   }): Convocatoria {
     const all = storage.get<Convocatoria[]>(KEY, []);
 
@@ -311,7 +359,12 @@ export const convocatoriaStore = {
       asignaciones: [],
       createdAt: nowIso(),
       createdBy: input.createdBy,
-      updatedAt: nowIso()
+      updatedAt: nowIso(),
+      autoRenew: input.autoRenew || undefined,
+      autoRenewMinutes: input.autoRenewMinutes,
+      autoRenewMaxCount: input.autoRenewMaxCount,
+      autoRenewCount: 0,
+      prioMode: input.prioMode,
     };
 
     storage.set(KEY, [c, ...all]);

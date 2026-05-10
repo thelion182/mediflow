@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { authStore } from "../auth/auth.store";
+import { usersStore } from "../modules/config/users.store";
 import type { Role } from "../auth/auth.types";
 import lockupPng from "../assets/branding/mediflow-lockup.png";
 
@@ -74,9 +75,17 @@ function initials(name: string) {
 
 // ── AppShell ─────────────────────────────────────────────────────────────
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const session = authStore.getSession()!;
+  const session  = authStore.getSession()!;
   const navigate = useNavigate();
   const location = useLocation();
+
+  const [showPassForm, setShowPassForm] = useState(false);
+  const [passOld,     setPassOld]       = useState("");
+  const [passNew,     setPassNew]       = useState("");
+  const [passConfirm, setPassConfirm]   = useState("");
+  const [passShowOld, setPassShowOld]   = useState(false);
+  const [passShowNew, setPassShowNew]   = useState(false);
+  const [passMsg,     setPassMsg]       = useState<{ ok: boolean; text: string } | null>(null);
 
   const items = NAV[session.role] ?? [];
 
@@ -88,6 +97,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   function logout() {
     authStore.clear();
     window.location.assign("/login");
+  }
+
+  function togglePassForm() {
+    setShowPassForm(v => !v);
+    setPassOld(""); setPassNew(""); setPassConfirm(""); setPassMsg(null);
+  }
+
+  function changePassword() {
+    if (!passNew.trim())      { setPassMsg({ ok: false, text: "Ingresá la nueva contraseña." }); return; }
+    if (passNew !== passConfirm) { setPassMsg({ ok: false, text: "Las contraseñas no coinciden." }); return; }
+    if (!usersStore.checkPassword(session.userId, passOld))
+      { setPassMsg({ ok: false, text: "Contraseña actual incorrecta." }); return; }
+    usersStore.setPassword(session.userId, passNew);
+    setPassMsg({ ok: true, text: "Contraseña actualizada correctamente." });
+    setPassOld(""); setPassNew(""); setPassConfirm("");
+    setTimeout(() => { setShowPassForm(false); setPassMsg(null); }, 1800);
   }
 
   return (
@@ -123,13 +148,101 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Footer: user + logout */}
         <div style={{ padding: "10px 8px", borderTop: "1px solid var(--border-2)" }}>
-          <div style={userCardStyle}>
+          {/* User card — clickable para cambiar contraseña */}
+          <button
+            onClick={togglePassForm}
+            title="Cambiar contraseña"
+            style={{
+              display: "flex", alignItems: "center", gap: 10, width: "100%",
+              padding: "8px 8px", borderRadius: 10, marginBottom: 6,
+              border: showPassForm ? "1px solid rgba(21,101,192,0.30)" : "1px solid transparent",
+              background: showPassForm ? "rgba(21,101,192,0.05)" : "transparent",
+              cursor: "pointer", textAlign: "left",
+              transition: "background 0.12s, border-color 0.12s",
+            }}
+            onMouseEnter={e => { if (!showPassForm) (e.currentTarget as HTMLElement).style.background = "var(--surface-2)"; }}
+            onMouseLeave={e => { if (!showPassForm) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+          >
             <div style={avatarStyle}>{initials(session.displayName)}</div>
-            <div style={{ minWidth: 0 }}>
+            <div style={{ minWidth: 0, flex: 1 }}>
               <div style={userNameStyle}>{session.displayName}</div>
               <div style={userRoleStyle}>{ROLE_LABEL[session.role]}</div>
             </div>
-          </div>
+            <span style={{ fontSize: 11, color: "var(--subtle)", flexShrink: 0 }}>
+              {showPassForm ? "▲" : "🔑"}
+            </span>
+          </button>
+
+          {/* Formulario de cambio de contraseña */}
+          {showPassForm && (
+            <div style={{
+              padding: "12px", borderRadius: 10, marginBottom: 8,
+              background: "var(--surface-2)", border: "1px solid var(--border-2)",
+            }}>
+              <p style={{ margin: "0 0 10px", fontSize: 12, fontWeight: 700, color: "var(--text)" }}>
+                Cambiar contraseña
+              </p>
+
+              {/* Contraseña actual */}
+              <div style={{ position: "relative", marginBottom: 8 }}>
+                <input
+                  type={passShowOld ? "text" : "password"}
+                  placeholder="Contraseña actual"
+                  value={passOld}
+                  onChange={e => { setPassOld(e.target.value); setPassMsg(null); }}
+                  style={passInputStyle}
+                />
+                <button type="button" onClick={() => setPassShowOld(v => !v)} style={passEyeStyle}>
+                  {passShowOld ? "🙈" : "👁"}
+                </button>
+              </div>
+
+              {/* Nueva */}
+              <div style={{ position: "relative", marginBottom: 8 }}>
+                <input
+                  type={passShowNew ? "text" : "password"}
+                  placeholder="Nueva contraseña"
+                  value={passNew}
+                  onChange={e => { setPassNew(e.target.value); setPassMsg(null); }}
+                  style={passInputStyle}
+                />
+                <button type="button" onClick={() => setPassShowNew(v => !v)} style={passEyeStyle}>
+                  {passShowNew ? "🙈" : "👁"}
+                </button>
+              </div>
+
+              {/* Confirmar */}
+              <input
+                type="password"
+                placeholder="Confirmar nueva"
+                value={passConfirm}
+                onChange={e => { setPassConfirm(e.target.value); setPassMsg(null); }}
+                style={{ ...passInputStyle, marginBottom: 10 }}
+                onKeyDown={e => { if (e.key === "Enter") changePassword(); }}
+              />
+
+              {passMsg && (
+                <p style={{
+                  margin: "0 0 8px", fontSize: 11.5, lineHeight: 1.4, padding: "6px 8px",
+                  borderRadius: 6, fontWeight: 600,
+                  background: passMsg.ok ? "rgba(22,163,74,0.10)" : "rgba(220,38,38,0.08)",
+                  color: passMsg.ok ? "rgb(22,163,74)" : "rgb(185,28,28)",
+                }}>
+                  {passMsg.ok ? "✓ " : "✗ "}{passMsg.text}
+                </p>
+              )}
+
+              <button
+                onClick={changePassword}
+                style={{
+                  width: "100%", padding: "8px", borderRadius: 8, border: "none",
+                  background: "var(--blue)", color: "#fff", fontWeight: 700, fontSize: 12,
+                  cursor: "pointer",
+                }}
+              >Guardar contraseña</button>
+            </div>
+          )}
+
           <button onClick={logout} style={logoutBtnStyle}
             onMouseEnter={e => Object.assign((e.currentTarget as HTMLButtonElement).style, logoutHoverStyle)}
             onMouseLeave={e => Object.assign((e.currentTarget as HTMLButtonElement).style, logoutBaseStyle)}>
@@ -245,6 +358,17 @@ const logoutHoverStyle: React.CSSProperties = {
   borderColor: "rgba(220,38,38,0.20)",
   color: "var(--danger)",
 };
+const passInputStyle: React.CSSProperties = {
+  width: "100%", boxSizing: "border-box",
+  padding: "7px 32px 7px 10px", borderRadius: 7,
+  border: "1px solid var(--border)", background: "var(--surface)",
+  fontSize: 12, color: "var(--text)", fontFamily: "inherit",
+};
+const passEyeStyle: React.CSSProperties = {
+  position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+  background: "none", border: "none", cursor: "pointer", fontSize: 13, padding: 0,
+};
+
 const logoutBtnStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",

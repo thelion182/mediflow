@@ -72,5 +72,14 @@ export type Convocatoria = {
   updatedAt?: string;
 
   createdAt: string;
-  createdBy: string;          // userId suplencias
+  createdBy: string;
+
+  // Auto-renovación al vencer sin cobertura
+  autoRenew?: boolean;
+  autoRenewMinutes?: number;
+  autoRenewMaxCount?: number;
+  autoRenewCount?: number;
+
+  // Modo de priorización de destinatarios
+  prioMode?: "SCORING" | "MANUAL";
 };

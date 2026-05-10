@@ -4,6 +4,7 @@ import { authStore } from "../../auth/auth.store";
 import { AppShell } from "../../ui/AppShell";
 import { minutesFromNow, toLocalDateTimeInputValue } from "../../core/date";
 import { convocatoriaStore } from "./convocatoria.store";
+import { prioAuditStore } from "./prio.audit.store";
 import { medicosStore } from "../admin/medicos.store";
 import { sectoresStore } from "../admin/sectores.store";
 import { sedesStore } from "../admin/sedes.store";
@@ -12,8 +13,9 @@ import { CANAL_META } from "../config/config.types";
 import type { Canal } from "./convocatoria.types";
 import type { MedicoTipo } from "../admin/medicos.types";
 
-type ModoEnvio = "MASIVO" | "SECUENCIAL";
+type ModoEnvio  = "MASIVO" | "SECUENCIAL";
 type TipoFiltro = "TODOS" | MedicoTipo;
+type PrioMode   = "SCORING" | "MANUAL";
 
 const TIPO_RGB: Record<MedicoTipo, string> = {
   TITULAR:       "21,101,192",
@@ -111,18 +113,17 @@ export function NuevaConvocatoria() {
   const sectorFinal = (sectorSel === OTRO ? sectorOtro : sectorSel).trim();
   const sedeFinal   = ((sedeSel === OTRO ? sedeOtro : sedeSel).trim()) || undefined;
 
-  // Business rule Ambulancias/Piso → solo SANATORIO
   const sedeObj = sedesActivas.find((s: any) => s.nombre === sedeFinal);
   const sectorRestringido = ["ambulancias","piso"].some(x => sectorFinal.toLowerCase() === x);
   const showSanatorioWarn = sectorRestringido && (!sedeObj || (sedeObj as any).tipo !== "SANATORIO");
 
   // ── Turno ──────────────────────────────────────────────────────────────
-  const [inicio,     setInicio]     = useState(toLocalDateTimeInputValue(minutesFromNow(60)));
-  const [fin,        setFin]        = useState(toLocalDateTimeInputValue(minutesFromNow(60 + 12 * 60)));
-  const [cupos,      setCupos]      = useState(1);
-  const [vencimiento,setVencimiento]= useState(toLocalDateTimeInputValue(minutesFromNow(6 * 60)));
-  const [prioridad,  setPrioridad]  = useState<"NORMAL"|"ALTA">("NORMAL");
-  const [notas,      setNotas]      = useState("");
+  const [inicio,      setInicio]      = useState(toLocalDateTimeInputValue(minutesFromNow(60)));
+  const [fin,         setFin]         = useState(toLocalDateTimeInputValue(minutesFromNow(60 + 12 * 60)));
+  const [cupos,       setCupos]       = useState(1);
+  const [vencimiento, setVencimiento] = useState(toLocalDateTimeInputValue(minutesFromNow(6 * 60)));
+  const [prioridad,   setPrioridad]   = useState<"NORMAL"|"ALTA">("NORMAL");
+  const [notas,       setNotas]       = useState("");
 
   // ── Canales ────────────────────────────────────────────────────────────
   const cfg = configStore.get();
@@ -143,8 +144,8 @@ export function NuevaConvocatoria() {
   }
 
   // ── Modo envío ─────────────────────────────────────────────────────────
-  const [modoEnvio, setModoEnvio]           = useState<ModoEnvio>("SECUENCIAL");
-  const [sinVerMin, setSinVerMin]           = useState(60);
+  const [modoEnvio, setModoEnvio]             = useState<ModoEnvio>("SECUENCIAL");
+  const [sinVerMin, setSinVerMin]             = useState(60);
   const [sinResponderMin, setSinResponderMin] = useState(60);
   useEffect(() => {
     if (Number(cupos) > 1 && modoEnvio === "SECUENCIAL") setModoEnvio("MASIVO");
@@ -152,10 +153,18 @@ export function NuevaConvocatoria() {
   const cuposNum  = Number(cupos) || 1;
   const modoFinal: ModoEnvio = modoEnvio === "SECUENCIAL" && cuposNum !== 1 ? "MASIVO" : modoEnvio;
 
+  // ── Prioridad de destinatarios ─────────────────────────────────────────
+  const [prioMode, setPrioMode] = useState<PrioMode>("SCORING");
+
+  // ── Auto-renovación ────────────────────────────────────────────────────
+  const [autoRenew,         setAutoRenew]         = useState(false);
+  const [autoRenewMinutes,  setAutoRenewMinutes]   = useState(60);
+  const [autoRenewMaxCount, setAutoRenewMaxCount]  = useState(3);
+
   // ── Filtros de médicos ─────────────────────────────────────────────────
-  const [qMedico,   setQMedico]   = useState("");
-  const [tipoSel,   setTipoSel]   = useState<TipoFiltro>("TODOS");
-  const [cargoSel,  setCargoSel]  = useState<string>("TODOS");
+  const [qMedico,      setQMedico]      = useState("");
+  const [tipoSel,      setTipoSel]      = useState<TipoFiltro>("TODOS");
+  const [cargoSel,     setCargoSel]     = useState<string>("TODOS");
   const [prioOverride, setPrioOverride] = useState<Record<string, number | undefined>>({});
   const [dest, setDest] = useState<Record<string, boolean>>({});
 
@@ -170,7 +179,6 @@ export function NuevaConvocatoria() {
     return Array.from(set).sort();
   }, [medicosOrdenados.map((m: any) => `${m.userId}:${m.especialidad}`).join("|")]);
 
-  // Conteo por tipo (para chips)
   const countByTipo = useMemo(() => {
     const c: Record<string, number> = { TODOS: 0, TITULAR: 0, SUPLENTE: 0, INDEPENDIENTE: 0 };
     for (const m of medicosOrdenados) {
@@ -181,7 +189,30 @@ export function NuevaConvocatoria() {
     return c;
   }, [medicosOrdenados]);
 
-  // Sync dest con catálogo
+  // ── Actividad mensual de médicos ───────────────────────────────────────
+  const medicosActividad = useMemo(() => {
+    const all = convocatoriaStore.list();
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    const monthEnd   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
+    const nowMs      = Date.now();
+
+    const map = new Map<string, { confirmadas: number; enCurso: boolean }>();
+    for (const c of all) {
+      const inicioMs = new Date(c.inicio).getTime();
+      const finMs    = new Date(c.fin).getTime();
+      if (inicioMs < monthStart || inicioMs > monthEnd) continue;
+      for (const a of c.asignaciones ?? []) {
+        if (a.estado !== "CONFIRMADA" && a.estado !== "CUMPLIDA") continue;
+        const prev = map.get(a.medicoId) ?? { confirmadas: 0, enCurso: false };
+        const enCurso = a.estado === "CONFIRMADA" && nowMs >= inicioMs && nowMs <= finMs;
+        map.set(a.medicoId, { confirmadas: prev.confirmadas + 1, enCurso: prev.enCurso || enCurso });
+      }
+    }
+    return map;
+  }, [tick]);
+
+  // ── Sync dest con catálogo ─────────────────────────────────────────────
   useEffect(() => {
     setDest(prev => {
       const next = { ...prev };
@@ -242,6 +273,8 @@ export function NuevaConvocatoria() {
     }),
   [destinatarios, medicosVisibles, prioOverride]);
 
+  const hasOverrides = Object.values(prioOverride).some(v => v !== undefined);
+
   // ── Submit ─────────────────────────────────────────────────────────────
   function submit() {
     if (!sectorFinal)         return alert("Sector es obligatorio.");
@@ -252,6 +285,29 @@ export function NuevaConvocatoria() {
     if (modoFinal === "SECUENCIAL" && cuposNum !== 1) return alert("SECUENCIAL solo con 1 cupo.");
     if (modoFinal === "SECUENCIAL" && destinatarios.length === 1)
       if (!confirm("Solo 1 médico seleccionado. ¿Enviás igual en SECUENCIAL?")) return;
+
+    // Guardar auditoría de prioridad manual
+    if (prioMode === "MANUAL") {
+      const overridesList = Object.entries(prioOverride)
+        .filter(([, v]) => v !== undefined)
+        .map(([medicoId, overridePrio]) => {
+          const m = medicosOrdenados.find((x: any) => x.userId === medicoId);
+          return {
+            medicoId,
+            medicoName: m?.displayName ?? medicoId,
+            catPrio: (m as any)?.prioridad,
+            overridePrio: overridePrio!,
+          };
+        });
+      prioAuditStore.add({
+        timestamp:  new Date().toISOString(),
+        actorId:    session.userId,
+        actorName:  session.displayName,
+        sector:     sectorFinal,
+        sede:       sedeFinal,
+        overrides:  overridesList,
+      });
+    }
 
     const c = convocatoriaStore.createAndSend({
       sector:      sectorFinal,
@@ -270,6 +326,10 @@ export function NuevaConvocatoria() {
       timeouts:    modoFinal === "SECUENCIAL"
         ? { sinVerMin: Number(sinVerMin) || 60, sinResponderMin: Number(sinResponderMin) || 60 }
         : undefined,
+      autoRenew:         autoRenew || undefined,
+      autoRenewMinutes:  autoRenew ? autoRenewMinutes : undefined,
+      autoRenewMaxCount: autoRenew ? autoRenewMaxCount : undefined,
+      prioMode,
     });
     nav(`/dashboard/c/${c.id}`);
   }
@@ -285,6 +345,11 @@ export function NuevaConvocatoria() {
             <span style={{ fontWeight: 600, color: "var(--text)" }}>{destinatarios.length}</span> seleccionados ·
             <span style={{ marginLeft: 6, fontWeight: 600, color: "var(--text)" }}>{modoFinal}</span> ·
             <span style={{ marginLeft: 6, fontWeight: 600, color: "var(--text)" }}>{cuposNum}</span> cupo{cuposNum !== 1 ? "s" : ""}
+            {autoRenew && (
+              <span style={{ marginLeft: 8, fontSize: 11.5, color: "rgb(22,163,74)", fontWeight: 600 }}>
+                · ♻ Auto-renovar ×{autoRenewMaxCount}
+              </span>
+            )}
           </p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -296,12 +361,11 @@ export function NuevaConvocatoria() {
       {/* Dos columnas */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1.1fr", gap: 16, alignItems: "start" }}>
 
-        {/* ─── Columna izquierda — datos del turno ─────────────────────── */}
+        {/* ─── Columna izquierda ───────────────────────────────────────── */}
         <div style={{ display: "grid", gap: 16 }}>
 
           <Panel title="Lugar y turno">
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              {/* Sector */}
               <Field label="Sector">
                 <select style={selectStyle} value={sectorSel} onChange={e => setSectorSel(e.target.value)}>
                   {sectoresActivos.map((s: any) => <option key={s.id} value={s.nombre}>{s.nombre}</option>)}
@@ -313,7 +377,6 @@ export function NuevaConvocatoria() {
                 )}
               </Field>
 
-              {/* Sede */}
               <Field label="Sede / Servicio">
                 <select style={selectStyle} value={sedeSel} onChange={e => setSedeSel(e.target.value)}>
                   {sedesActivas.map((s: any) => (
@@ -327,15 +390,13 @@ export function NuevaConvocatoria() {
                 )}
               </Field>
 
-              {/* Warning sanatorio */}
               {showSanatorioWarn && (
                 <div style={{
                   gridColumn: "1 / -1", padding: "10px 14px", borderRadius: 10,
                   background: "rgba(217,119,6,0.08)", border: "1px solid rgba(217,119,6,0.30)",
                   color: "rgb(160,90,0)", fontSize: 13, lineHeight: 1.5,
                 }}>
-                  <b>Atención:</b> <b>{sectorFinal}</b> solo se puede cubrir en sedes tipo SANATORIO
-                  (Galicia, Central Lenguas, Juan Lacaze, Juan Pablo II).
+                  <b>Atención:</b> <b>{sectorFinal}</b> solo se puede cubrir en sedes tipo SANATORIO.
                 </div>
               )}
 
@@ -398,6 +459,98 @@ export function NuevaConvocatoria() {
                   </Field>
                 </>
               )}
+
+              {/* Modo de priorización */}
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label style={lblStyle}>Modo de priorización de médicos</label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {([
+                    { key: "SCORING" as PrioMode, label: "Por scoring", icon: "📊", desc: "Orden según catálogo y puntaje" },
+                    { key: "MANUAL"  as PrioMode, label: "Manual",      icon: "✏️",  desc: "Elección manual (queda registrada)" },
+                  ]).map(m => (
+                    <button key={m.key} onClick={() => setPrioMode(m.key)} style={{
+                      flex: 1, padding: "10px 12px", borderRadius: 9, fontSize: 12.5, fontWeight: 600,
+                      border: `1.5px solid ${prioMode === m.key
+                        ? m.key === "MANUAL" ? "rgba(217,119,6,0.60)" : "rgba(21,101,192,0.60)"
+                        : "var(--border)"}`,
+                      background: prioMode === m.key
+                        ? m.key === "MANUAL" ? "rgba(217,119,6,0.08)" : "rgba(21,101,192,0.08)"
+                        : "var(--surface-2)",
+                      color: prioMode === m.key
+                        ? m.key === "MANUAL" ? "rgb(160,90,0)" : "var(--blue)"
+                        : "var(--muted)",
+                      cursor: "pointer", textAlign: "left",
+                    }}>
+                      <div>{m.icon} {m.label}</div>
+                      <div style={{ fontSize: 10.5, marginTop: 2, fontWeight: 400, opacity: 0.8 }}>{m.desc}</div>
+                    </button>
+                  ))}
+                </div>
+                {prioMode === "MANUAL" && (
+                  <div style={{
+                    marginTop: 8, padding: "8px 12px", borderRadius: 8,
+                    background: "rgba(217,119,6,0.07)", border: "1px solid rgba(217,119,6,0.25)",
+                    fontSize: 12, color: "rgb(150,80,0)", lineHeight: 1.5,
+                  }}>
+                    ⚠️ Modo manual: {hasOverrides ? `hay ${Object.values(prioOverride).filter(v => v !== undefined).length} prioridades modificadas.` : "no hay prioridades modificadas aún."}
+                    {" "}Al enviar quedará un registro de auditoría para revisión del Super Admin.
+                  </div>
+                )}
+              </div>
+            </div>
+          </Panel>
+
+          {/* Auto-renovación */}
+          <Panel title="Auto-renovación">
+            <div style={{ display: "grid", gap: 12 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+                <div
+                  onClick={() => setAutoRenew(v => !v)}
+                  style={{
+                    width: 40, height: 22, borderRadius: 11, flexShrink: 0,
+                    background: autoRenew ? "rgb(22,163,74)" : "var(--border)",
+                    position: "relative", cursor: "pointer", transition: "background 0.2s",
+                  }}
+                >
+                  <div style={{
+                    position: "absolute", top: 3, left: autoRenew ? 21 : 3,
+                    width: 16, height: 16, borderRadius: "50%",
+                    background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                    transition: "left 0.2s",
+                  }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
+                    Renovar automáticamente al vencer
+                  </div>
+                  <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>
+                    Si nadie acepta y vence, extiende el plazo y reenvía las invitaciones
+                  </div>
+                </div>
+              </label>
+
+              {autoRenew && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, paddingTop: 4 }}>
+                  <Field label="Extender por (minutos)" hint="Cuánto tiempo más se da al vencer">
+                    <input style={inputStyle} type="number" min={10} step={15}
+                      value={autoRenewMinutes}
+                      onChange={e => setAutoRenewMinutes(Math.max(10, Number(e.target.value)))} />
+                  </Field>
+                  <Field label="Máximo de renovaciones" hint="Se cancela si se supera este número">
+                    <input style={inputStyle} type="number" min={1} max={10}
+                      value={autoRenewMaxCount}
+                      onChange={e => setAutoRenewMaxCount(Math.max(1, Math.min(10, Number(e.target.value))))} />
+                  </Field>
+                  <div style={{
+                    gridColumn: "1 / -1", padding: "8px 12px", borderRadius: 8,
+                    background: "rgba(22,163,74,0.07)", border: "1px solid rgba(22,163,74,0.20)",
+                    fontSize: 12, color: "rgb(20,120,60)",
+                  }}>
+                    ♻ Se renovará hasta <b>{autoRenewMaxCount}×</b>, extendiendo <b>{autoRenewMinutes} min</b> cada vez.
+                    Total máximo: <b>{Math.round(autoRenewMinutes * autoRenewMaxCount / 60 * 10) / 10}h</b> adicionales.
+                  </div>
+                </div>
+              )}
             </div>
           </Panel>
 
@@ -445,6 +598,7 @@ export function NuevaConvocatoria() {
                 <div style={{ display: "grid", gap: 6 }}>
                   {previewOrden.map(x => {
                     const rgb = TIPO_RGB[(x.tipo as MedicoTipo) ?? "SUPLENTE"] ?? "100,116,139";
+                    const hasOv = prioOverride[x.id] !== undefined;
                     return (
                       <div key={x.id} style={{
                         display: "flex", alignItems: "center", gap: 10, padding: "8px 12px",
@@ -459,8 +613,10 @@ export function NuevaConvocatoria() {
                         <TipoBadge tipo={x.tipo} />
                         <span style={{
                           fontSize: 11, padding: "2px 7px", borderRadius: 6,
-                          background: "var(--surface)", border: "1px solid var(--border-2)", color: "var(--muted)",
-                        }}>P{x.prio === 9999 ? "—" : x.prio}</span>
+                          background: hasOv ? "rgba(217,119,6,0.10)" : "var(--surface)",
+                          border: `1px solid ${hasOv ? "rgba(217,119,6,0.35)" : "var(--border-2)"}`,
+                          color: hasOv ? "rgb(160,90,0)" : "var(--muted)",
+                        }}>P{x.prio === 9999 ? "—" : x.prio}{hasOv ? " ✏" : ""}</span>
                       </div>
                     );
                   })}
@@ -494,9 +650,9 @@ export function NuevaConvocatoria() {
                 <label style={lblStyle}>Tipo de médico</label>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   {([
-                    { key: "TODOS",         label: `Todos (${countByTipo.TODOS})`,                  rgb: "100,116,139" },
-                    { key: "TITULAR",       label: `Titulares (${countByTipo.TITULAR ?? 0})`,       rgb: TIPO_RGB.TITULAR },
-                    { key: "SUPLENTE",      label: `Suplentes (${countByTipo.SUPLENTE ?? 0})`,      rgb: TIPO_RGB.SUPLENTE },
+                    { key: "TODOS",         label: `Todos (${countByTipo.TODOS})`,                       rgb: "100,116,139" },
+                    { key: "TITULAR",       label: `Titulares (${countByTipo.TITULAR ?? 0})`,            rgb: TIPO_RGB.TITULAR },
+                    { key: "SUPLENTE",      label: `Suplentes (${countByTipo.SUPLENTE ?? 0})`,           rgb: TIPO_RGB.SUPLENTE },
                     { key: "INDEPENDIENTE", label: `Independientes (${countByTipo.INDEPENDIENTE ?? 0})`, rgb: TIPO_RGB.INDEPENDIENTE },
                   ] as { key: TipoFiltro; label: string; rgb: string }[]).map(t => (
                     <button key={t.key} onClick={() => setTipoSel(t.key)} style={{
@@ -510,7 +666,7 @@ export function NuevaConvocatoria() {
                 </div>
               </div>
 
-              {/* Especialidad */}
+              {/* Especialidad + búsqueda */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 <div>
                   <label style={lblStyle}>Especialidad</label>
@@ -533,11 +689,11 @@ export function NuevaConvocatoria() {
                 <label style={lblStyle}>Selección rápida (sobre visibles)</label>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   {[
-                    { label: "Todos",           fn: () => selectAll(true)                    },
-                    { label: "Ninguno",          fn: () => selectAll(false)                   },
-                    { label: "Solo titulares",   fn: () => selectByTipo("TITULAR")            },
-                    { label: "Solo suplentes",   fn: () => selectByTipo("SUPLENTE")           },
-                    { label: "Solo independ.",   fn: () => selectByTipo("INDEPENDIENTE")      },
+                    { label: "Todos",           fn: () => selectAll(true)               },
+                    { label: "Ninguno",          fn: () => selectAll(false)              },
+                    { label: "Solo titulares",   fn: () => selectByTipo("TITULAR")       },
+                    { label: "Solo suplentes",   fn: () => selectByTipo("SUPLENTE")      },
+                    { label: "Solo independ.",   fn: () => selectByTipo("INDEPENDIENTE") },
                   ].map(b => (
                     <button key={b.label} onClick={b.fn} style={{
                       padding: "5px 12px", borderRadius: 8, fontSize: 12, fontWeight: 500,
@@ -556,15 +712,16 @@ export function NuevaConvocatoria() {
             <div style={{ height: 1, background: "var(--border-2)", margin: "14px 0" }} />
 
             {/* Lista de médicos */}
-            <div style={{ display: "grid", gap: 6, maxHeight: 480, overflowY: "auto", paddingRight: 2 }}>
+            <div style={{ display: "grid", gap: 6, maxHeight: 520, overflowY: "auto", paddingRight: 2 }}>
               {medicosVisibles.length === 0 && (
                 <p style={{ fontSize: 13, color: "var(--muted)", padding: "12px 0" }}>Sin médicos para los filtros seleccionados.</p>
               )}
               {medicosVisibles.map((m: any) => {
-                const checked = !!dest[m.userId];
-                const rgb     = TIPO_RGB[m.tipo as MedicoTipo] ?? "100,116,139";
-                const ov      = prioOverride[m.userId];
-                const eff     = prioEff(m.userId, m.prioridad);
+                const checked   = !!dest[m.userId];
+                const rgb       = TIPO_RGB[m.tipo as MedicoTipo] ?? "100,116,139";
+                const ov        = prioOverride[m.userId];
+                const eff       = prioEff(m.userId, m.prioridad);
+                const actividad = medicosActividad.get(m.userId);
 
                 return (
                   <div key={m.userId} style={{
@@ -589,39 +746,70 @@ export function NuevaConvocatoria() {
                           <span style={{ fontSize: 11, color: "var(--subtle)", fontStyle: "italic" }}>{m.especialidad}</span>
                         )}
                       </div>
-                      <div style={{ fontSize: 11, color: "var(--subtle)", marginTop: 2 }}>
-                        {m.userId}{m.telefono ? ` · ${m.telefono}` : ""}
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 11, color: "var(--subtle)" }}>
+                          {m.userId}{m.telefono ? ` · ${m.telefono}` : ""}
+                        </span>
+                        {/* Actividad del mes */}
+                        {actividad ? (
+                          <span style={{
+                            fontSize: 10.5, padding: "1px 7px", borderRadius: 20,
+                            background: actividad.enCurso ? "rgba(22,163,74,0.12)" : "rgba(21,101,192,0.10)",
+                            color: actividad.enCurso ? "rgb(16,130,55)" : "rgb(30,80,160)",
+                            border: `1px solid ${actividad.enCurso ? "rgba(22,163,74,0.28)" : "rgba(21,101,192,0.22)"}`,
+                            fontWeight: 600,
+                          }}>
+                            {actividad.enCurso ? "● En guardia" : `${actividad.confirmadas}× este mes`}
+                          </span>
+                        ) : (
+                          <span style={{
+                            fontSize: 10.5, padding: "1px 7px", borderRadius: 20,
+                            background: "rgba(100,116,139,0.08)", color: "var(--subtle)",
+                            border: "1px solid rgba(100,116,139,0.15)", fontWeight: 500,
+                          }}>Sin guardias este mes</span>
+                        )}
                       </div>
                     </div>
 
-                    {/* Prioridad efectiva */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                      <input
-                        type="number" min={1}
-                        placeholder={String(m.prioridad ?? "—")}
-                        value={ov === undefined ? "" : String(ov)}
-                        onClick={e => e.stopPropagation()}
-                        onChange={e => {
-                          const v = normalizePrioInput(e.target.value);
-                          setPrioOverride(prev => ({ ...prev, [m.userId]: v }));
-                        }}
-                        title="Prioridad para esta convocatoria (vacío = catálogo)"
-                        style={{
-                          width: 50, padding: "4px 6px", borderRadius: 6, textAlign: "center",
-                          border: `1px solid ${ov !== undefined ? "rgba(21,101,192,0.60)" : "var(--border-2)"}`,
-                          background: ov !== undefined ? "rgba(21,101,192,0.08)" : "var(--surface)",
-                          fontSize: 12, color: "var(--text)",
-                        }}
-                      />
-                      <span style={{ fontSize: 10.5, color: "var(--subtle)", minWidth: 28 }}>
-                        P{eff === 9999 ? "—" : eff}
-                      </span>
-                      {ov !== undefined && (
-                        <button onClick={e => { e.stopPropagation(); setPrioOverride(p => { const n = {...p}; delete n[m.userId]; return n; }); }}
-                          title="Limpiar override"
-                          style={{ padding: "2px 6px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", fontSize: 11, cursor: "pointer", color: "var(--muted)" }}>✕</button>
-                      )}
-                    </div>
+                    {/* Prioridad override — solo visible en modo manual o si ya tiene override */}
+                    {(prioMode === "MANUAL" || ov !== undefined) && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                        <input
+                          type="number" min={1}
+                          placeholder={String(m.prioridad ?? "—")}
+                          value={ov === undefined ? "" : String(ov)}
+                          onClick={e => e.stopPropagation()}
+                          onChange={e => {
+                            const v = normalizePrioInput(e.target.value);
+                            setPrioOverride(prev => ({ ...prev, [m.userId]: v }));
+                          }}
+                          title="Prioridad manual para esta convocatoria"
+                          style={{
+                            width: 50, padding: "4px 6px", borderRadius: 6, textAlign: "center",
+                            border: `1px solid ${ov !== undefined ? "rgba(217,119,6,0.60)" : "var(--border-2)"}`,
+                            background: ov !== undefined ? "rgba(217,119,6,0.08)" : "var(--surface)",
+                            fontSize: 12, color: "var(--text)",
+                          }}
+                        />
+                        <span style={{ fontSize: 10.5, color: "var(--subtle)", minWidth: 28 }}>
+                          P{eff === 9999 ? "—" : eff}
+                        </span>
+                        {ov !== undefined && (
+                          <button onClick={e => { e.stopPropagation(); setPrioOverride(p => { const n = {...p}; delete n[m.userId]; return n; }); }}
+                            title="Limpiar override"
+                            style={{ padding: "2px 6px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", fontSize: 11, cursor: "pointer", color: "var(--muted)" }}>✕</button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* En modo SCORING: mostrar prioridad de catálogo como referencia */}
+                    {prioMode === "SCORING" && ov === undefined && (
+                      <span style={{
+                        fontSize: 11, padding: "2px 7px", borderRadius: 6, flexShrink: 0,
+                        background: "var(--surface)", border: "1px solid var(--border-2)",
+                        color: "var(--subtle)",
+                      }}>P{eff === 9999 ? "—" : eff}</span>
+                    )}
                   </div>
                 );
               })}

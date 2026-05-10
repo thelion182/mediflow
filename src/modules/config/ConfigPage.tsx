@@ -1,12 +1,13 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { AppShell } from "../../ui/AppShell";
 import { configStore } from "./config.store";
 import { authStore } from "../../auth/auth.store";
 import { UsersAdmin } from "./UsersAdmin";
+import { prioAuditStore, type PrioAuditEntry } from "../convocatorias/prio.audit.store";
 import type { SystemConfig, Canal, WhatsAppProvider, SmsProvider, EmailProvider, FotosConfig } from "./config.types";
 import { CANAL_META } from "./config.types";
 
-type Tab = "usuarios" | "org" | "canales" | "defaults" | "scoring";
+type Tab = "usuarios" | "org" | "canales" | "defaults" | "scoring" | "auditoria";
 
 // ── Toggle ────────────────────────────────────────────────────────────────
 function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
@@ -149,11 +150,12 @@ export function ConfigPage() {
   }
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: "usuarios", label: "Usuarios" },
-    { id: "canales",  label: "Canales" },
-    { id: "defaults", label: "Convocatorias" },
-    { id: "scoring",  label: "Scoring" },
-    { id: "org",      label: "Organización" },
+    { id: "usuarios",  label: "Usuarios" },
+    { id: "canales",   label: "Canales" },
+    { id: "defaults",  label: "Convocatorias" },
+    { id: "scoring",   label: "Scoring" },
+    { id: "org",       label: "Organización" },
+    ...(session?.role === "SUPER_ADMIN" ? [{ id: "auditoria" as Tab, label: "Auditoría prioridades" }] : []),
   ];
 
   return (
@@ -598,6 +600,11 @@ export function ConfigPage() {
         </div>
       )}
 
+      {/* ── Tab: Auditoría de prioridades ────────────────────────────────── */}
+      {tab === "auditoria" && session?.role === "SUPER_ADMIN" && (
+        <AuditoriaTab />
+      )}
+
       {/* ── Tab: Organización ─────────────────────────────────────────────── */}
       {tab === "org" && (
         <div style={sectionStyle}>
@@ -664,6 +671,142 @@ export function ConfigPage() {
         </div>
       )}
     </AppShell>
+  );
+}
+
+// ── Auditoría de prioridades ──────────────────────────────────────────────
+function AuditoriaTab() {
+  const [tick, setTick] = useState(0);
+  const entries = useMemo(() => prioAuditStore.list(), [tick]);
+
+  function fmtDt(iso: string) {
+    return new Date(iso).toLocaleString("es-UY", {
+      day: "2-digit", month: "2-digit", year: "numeric",
+      hour: "2-digit", minute: "2-digit",
+    });
+  }
+
+  return (
+    <div style={{ display: "grid", gap: 16 }}>
+      <div style={{ ...sectionStyle, paddingBottom: 18 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+          <div>
+            <h2 style={{ ...sectionTitle, margin: 0 }}>Registros de prioridad manual</h2>
+            <p style={{ margin: "4px 0 0", fontSize: 12.5, color: "var(--muted)" }}>
+              Convocatorias donde el usuario eligió prioridad manual en vez del scoring automático.
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => setTick(t => t + 1)} style={{ ...ghostBtn, fontSize: 12 }}>↺ Refrescar</button>
+            {entries.length > 0 && (
+              <button
+                onClick={() => { if (confirm("¿Borrar todos los registros de auditoría? Esta acción no se puede deshacer.")) { prioAuditStore.clear(); setTick(t => t + 1); } }}
+                style={{ ...ghostBtn, fontSize: 12, color: "var(--danger)", borderColor: "rgba(220,38,38,0.25)" }}
+              >Limpiar registros</button>
+            )}
+          </div>
+        </div>
+
+        {entries.length === 0 ? (
+          <div style={{ padding: "28px 0", textAlign: "center", color: "var(--muted)", fontSize: 13 }}>
+            <div style={{ fontSize: 24, marginBottom: 8 }}>📊</div>
+            No hay registros de prioridad manual. El sistema usa scoring automático en todas las convocatorias.
+          </div>
+        ) : (
+          <div style={{ marginTop: 16 }}>
+            <div style={{
+              display: "grid", gridTemplateColumns: "180px 1fr 1fr 80px",
+              padding: "7px 14px", background: "var(--surface-2)",
+              fontSize: 11, fontWeight: 700, color: "var(--subtle)", letterSpacing: "0.05em",
+              textTransform: "uppercase", borderBottom: "1px solid var(--border-2)",
+              borderRadius: "8px 8px 0 0",
+            }}>
+              <div>Fecha</div><div>Usuario</div><div>Sector / Sede</div><div style={{ textAlign: "center" }}>Cambios</div>
+            </div>
+            <div style={{ border: "1px solid var(--border-2)", borderTop: "none", borderRadius: "0 0 8px 8px", overflow: "hidden" }}>
+              {entries.map((e: PrioAuditEntry, i) => (
+                <AuditoriaRow key={e.id} entry={e} fmtDt={fmtDt} odd={i % 2 !== 0} />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AuditoriaRow({ entry, fmtDt, odd }: { entry: PrioAuditEntry; fmtDt: (s: string) => string; odd: boolean }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <div
+        onClick={() => setOpen(v => !v)}
+        style={{
+          display: "grid", gridTemplateColumns: "180px 1fr 1fr 80px",
+          padding: "10px 14px", fontSize: 13, cursor: "pointer",
+          background: odd ? "rgba(0,0,0,0.015)" : "transparent",
+          borderTop: "1px solid var(--border-2)", alignItems: "center",
+          transition: "background 0.1s",
+        }}
+      >
+        <div style={{ fontSize: 12, color: "var(--muted)" }}>{fmtDt(entry.timestamp)}</div>
+        <div>
+          <div style={{ fontWeight: 600, color: "var(--text)" }}>{entry.actorName}</div>
+          <div style={{ fontSize: 11, color: "var(--subtle)" }}>{entry.actorId}</div>
+        </div>
+        <div>
+          <div style={{ fontWeight: 600, color: "var(--text)" }}>{entry.sector}</div>
+          {entry.sede && <div style={{ fontSize: 11, color: "var(--subtle)" }}>{entry.sede}</div>}
+        </div>
+        <div style={{ textAlign: "center" }}>
+          {entry.overrides.length > 0 ? (
+            <span style={{
+              padding: "2px 9px", borderRadius: 20, fontSize: 11, fontWeight: 700,
+              background: "rgba(217,119,6,0.12)", color: "rgb(160,90,0)",
+              border: "1px solid rgba(217,119,6,0.25)",
+            }}>{entry.overrides.length} ✏</span>
+          ) : (
+            <span style={{ fontSize: 11, color: "var(--subtle)" }}>Modo manual</span>
+          )}
+          <span style={{ marginLeft: 6, fontSize: 11, color: "var(--subtle)" }}>{open ? "▲" : "▼"}</span>
+        </div>
+      </div>
+
+      {open && (
+        <div style={{ padding: "12px 18px", background: "rgba(217,119,6,0.04)", borderTop: "1px dashed rgba(217,119,6,0.20)" }}>
+          {entry.overrides.length === 0 ? (
+            <p style={{ margin: 0, fontSize: 12.5, color: "var(--muted)" }}>
+              El usuario eligió <b>modo manual</b> pero no modificó ninguna prioridad individualmente.
+            </p>
+          ) : (
+            <div style={{ display: "grid", gap: 4 }}>
+              <p style={{ margin: "0 0 8px", fontSize: 11.5, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                Prioridades modificadas
+              </p>
+              {entry.overrides.map((ov, idx) => (
+                <div key={idx} style={{
+                  display: "flex", alignItems: "center", gap: 10, padding: "6px 10px",
+                  borderRadius: 7, background: "var(--surface)", border: "1px solid var(--border-2)",
+                  fontSize: 12.5,
+                }}>
+                  <span style={{ fontWeight: 600, color: "var(--text)", flex: 1 }}>{ov.medicoName}</span>
+                  <span style={{ color: "var(--subtle)", fontSize: 11 }}>{ov.medicoId}</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    {ov.catPrio !== undefined && (
+                      <span style={{ color: "var(--muted)", fontSize: 11 }}>P{ov.catPrio} →</span>
+                    )}
+                    <span style={{
+                      padding: "2px 8px", borderRadius: 6, fontSize: 12, fontWeight: 700,
+                      background: "rgba(217,119,6,0.12)", color: "rgb(160,90,0)",
+                    }}>P{ov.overridePrio}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </>
   );
 }
 
