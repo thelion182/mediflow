@@ -5,6 +5,7 @@ import { medicosStore } from "../admin/medicos.store";
 import { AppShell } from "../../ui/AppShell";
 import type { Canal } from "./convocatoria.types";
 import { CANAL_META } from "../config/config.types";
+import { authStore } from "../../auth/auth.store";
 
 // ── Constants ─────────────────────────────────────────────────────────────
 const AUTO_REFRESH_MS = 10_000;
@@ -735,6 +736,19 @@ export function SuplenciasDashboard() {
     return () => { document.removeEventListener("visibilitychange", onVis); stop(); };
   }, []);
 
+  const session      = authStore.getSession();
+  const isSuperAdmin = session?.role === "SUPER_ADMIN";
+
+  function handleDelete(c: any) {
+    const label = `${c.sector}${c.sede ? " · " + c.sede : ""} — ${new Date(c.inicio).toLocaleDateString("es-UY")}`;
+    const ok = window.confirm(
+      `⚠️ BORRADO PERMANENTE\n\n"${label}"\n\nEsta acción no se puede deshacer. ¿Confirmar?`
+    );
+    if (!ok) return;
+    convocatoriaStore.hardDelete(c.id);
+    setTick(t => t + 1);
+  }
+
   const all = useMemo(() => convocatoriaStore.list(), [tick]);
 
   const list = useMemo(() => {
@@ -907,8 +921,17 @@ export function SuplenciasDashboard() {
               </div>
               <div style={{ display: "grid", gap: 0 }}>
                 {list.map((c, i) => (
-                  <div key={c.id} style={{ borderBottom: i < list.length - 1 ? "1px solid var(--border-2)" : "none" }}>
+                  <div key={c.id} style={{ position: "relative", borderBottom: i < list.length - 1 ? "1px solid var(--border-2)" : "none" }}>
                     <ConvRow c={c} medicoName={medicoName} nav={nav} />
+                    {isSuperAdmin && (
+                      <button
+                        onClick={e => { e.stopPropagation(); handleDelete(c); }}
+                        title="Borrar permanentemente (Solo Super Admin)"
+                        style={deleteOverlayStyle}
+                        onMouseEnter={e => (e.currentTarget.style.background = "rgba(220,38,38,0.15)")}
+                        onMouseLeave={e => (e.currentTarget.style.background = "rgba(220,38,38,0.07)")}
+                      >🗑</button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -917,7 +940,18 @@ export function SuplenciasDashboard() {
             /* ── Cards view ── */
             <div style={{ display: "grid", gap: 10 }}>
               {list.map(c => (
-                <ConvCard key={c.id} c={c} medicoName={medicoName} nav={nav} />
+                <div key={c.id} style={{ position: "relative" }}>
+                  <ConvCard c={c} medicoName={medicoName} nav={nav} />
+                  {isSuperAdmin && (
+                    <button
+                      onClick={e => { e.stopPropagation(); handleDelete(c); }}
+                      title="Borrar permanentemente (Solo Super Admin)"
+                      style={deleteOverlayStyle}
+                      onMouseEnter={e => (e.currentTarget.style.background = "rgba(220,38,38,0.15)")}
+                      onMouseLeave={e => (e.currentTarget.style.background = "rgba(220,38,38,0.07)")}
+                    >🗑</button>
+                  )}
+                </div>
               ))}
             </div>
           )}
@@ -931,3 +965,19 @@ export function SuplenciasDashboard() {
     </AppShell>
   );
 }
+
+const deleteOverlayStyle: React.CSSProperties = {
+  position: "absolute",
+  top: 8,
+  right: 8,
+  zIndex: 10,
+  padding: "5px 9px",
+  borderRadius: 8,
+  border: "1px solid rgba(220,38,38,0.30)",
+  background: "rgba(220,38,38,0.07)",
+  color: "rgb(220,38,38)",
+  fontSize: 14,
+  cursor: "pointer",
+  lineHeight: 1,
+  transition: "background 0.12s",
+};

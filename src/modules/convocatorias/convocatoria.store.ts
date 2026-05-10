@@ -504,6 +504,11 @@ export const convocatoriaStore = {
     storage.set(KEY, all);
   },
 
+  hardDelete(convId: string) {
+    const all = storage.get<Convocatoria[]>(KEY, []);
+    storage.set(KEY, all.filter(c => c.id !== convId));
+  },
+
   cancelarAsignacion(convId: string, asignacionId: string, nota?: string) {
     const all = storage.get<Convocatoria[]>(KEY, []);
     const idx = all.findIndex(c => c.id === convId);
