@@ -736,6 +736,8 @@ export function SuplenciasDashboard() {
     return () => { document.removeEventListener("visibilitychange", onVis); stop(); };
   }, []);
 
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+
   const session      = authStore.getSession();
   const isSuperAdmin = session?.role === "SUPER_ADMIN";
 
@@ -921,14 +923,19 @@ export function SuplenciasDashboard() {
               </div>
               <div style={{ display: "grid", gap: 0 }}>
                 {list.map((c, i) => (
-                  <div key={c.id} style={{ position: "relative", borderBottom: i < list.length - 1 ? "1px solid var(--border-2)" : "none" }}>
+                  <div
+                    key={c.id}
+                    style={{ position: "relative", borderBottom: i < list.length - 1 ? "1px solid var(--border-2)" : "none" }}
+                    onMouseEnter={() => setHoveredId(c.id)}
+                    onMouseLeave={() => setHoveredId(null)}
+                  >
                     <ConvRow c={c} medicoName={medicoName} nav={nav} />
                     {isSuperAdmin && (
                       <button
                         onClick={e => { e.stopPropagation(); handleDelete(c); }}
                         title="Borrar permanentemente (Solo Super Admin)"
-                        style={deleteOverlayStyle}
-                        onMouseEnter={e => (e.currentTarget.style.background = "rgba(220,38,38,0.15)")}
+                        style={{ ...deleteOverlayStyle, opacity: hoveredId === c.id ? 1 : 0, pointerEvents: hoveredId === c.id ? "auto" : "none" }}
+                        onMouseEnter={e => (e.currentTarget.style.background = "rgba(220,38,38,0.18)")}
                         onMouseLeave={e => (e.currentTarget.style.background = "rgba(220,38,38,0.07)")}
                       >🗑</button>
                     )}
@@ -940,14 +947,19 @@ export function SuplenciasDashboard() {
             /* ── Cards view ── */
             <div style={{ display: "grid", gap: 10 }}>
               {list.map(c => (
-                <div key={c.id} style={{ position: "relative" }}>
+                <div
+                  key={c.id}
+                  style={{ position: "relative" }}
+                  onMouseEnter={() => setHoveredId(c.id)}
+                  onMouseLeave={() => setHoveredId(null)}
+                >
                   <ConvCard c={c} medicoName={medicoName} nav={nav} />
                   {isSuperAdmin && (
                     <button
                       onClick={e => { e.stopPropagation(); handleDelete(c); }}
                       title="Borrar permanentemente (Solo Super Admin)"
-                      style={deleteOverlayStyle}
-                      onMouseEnter={e => (e.currentTarget.style.background = "rgba(220,38,38,0.15)")}
+                      style={{ ...deleteOverlayStyle, opacity: hoveredId === c.id ? 1 : 0, pointerEvents: hoveredId === c.id ? "auto" : "none" }}
+                      onMouseEnter={e => (e.currentTarget.style.background = "rgba(220,38,38,0.18)")}
                       onMouseLeave={e => (e.currentTarget.style.background = "rgba(220,38,38,0.07)")}
                     >🗑</button>
                   )}
@@ -979,5 +991,6 @@ const deleteOverlayStyle: React.CSSProperties = {
   fontSize: 14,
   cursor: "pointer",
   lineHeight: 1,
-  transition: "background 0.12s",
+  opacity: 0,
+  transition: "opacity 0.15s, background 0.12s",
 };
