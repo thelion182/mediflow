@@ -35,6 +35,7 @@ export const DEFAULT_CONFIG: SystemConfig = {
     defaultSinVerMin: 30,
     defaultSinResponderMin: 15,
     defaultPrioridad: "NORMAL",
+    plazoDevolusionHoras: 24,
   },
   scoring: {
     enabled: false,

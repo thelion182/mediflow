@@ -122,6 +122,7 @@ export function LoginPage() {
                 { id: "2001",  label: "Administrador", rgb: "38,166,154" },
                 { id: "1001",  label: "Coordinador",   rgb: "109,191,60" },
                 { id: "93598", label: "Médico",        rgb: "217,119,6"  },
+                { id: "3001",  label: "Consulta PD",   rgb: "100,116,139"},
               ].map(acc => (
                 <button
                   key={acc.id}

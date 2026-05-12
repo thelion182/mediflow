@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { parseCsv } from "../../core/csv";
 import { medicosStore } from "./medicos.store";
-import type { Medico, MedicoTipo } from "./medicos.types";
+import { sectoresStore } from "./sectores.store";
+import type { Medico, MedicoTipo, MedicoGremio, NivelTecnico, NivelPostgrado, NivelRelacionamiento, NivelQuejas } from "./medicos.types";
 import { DoctorAvatar } from "./DoctorAvatar";
 
 function normalizeUserId(input: string) {
@@ -41,9 +42,16 @@ export function MedicosAdmin() {
     especialidad: "",
     telefono: "",
     tipo: "SUPLENTE",
+    gremio: "SMU",
     prioridad: undefined,
-    activo: true
+    sectoresHabilitados: [],
+    scoreManual: {},
+    antiguedadAnios: undefined,
+    penalizacionGuardiaFija: 0,
+    activo: true,
   });
+
+  const sectores = useMemo(() => sectoresStore.list().filter(s => s.activo ?? true), [tick]);
 
   const [csvText, setCsvText] = useState("");
 
@@ -67,8 +75,13 @@ export function MedicosAdmin() {
       especialidad: form.especialidad?.trim() || undefined,
       telefono: form.telefono?.trim() || undefined,
       tipo: normalizeTipo(form.tipo),
+      gremio: (form.gremio ?? "SMU") as MedicoGremio,
       prioridad: normalizePrioridad(form.prioridad),
-      activo: form.activo ?? true
+      sectoresHabilitados: form.sectoresHabilitados ?? [],
+      scoreManual: form.scoreManual ?? {},
+      antiguedadAnios: form.antiguedadAnios ?? undefined,
+      penalizacionGuardiaFija: form.penalizacionGuardiaFija ?? 0,
+      activo: form.activo ?? true,
     });
 
     setForm({
@@ -79,8 +92,13 @@ export function MedicosAdmin() {
       especialidad: "",
       telefono: "",
       tipo: "SUPLENTE",
+      gremio: "SMU",
       prioridad: undefined,
-      activo: true
+      sectoresHabilitados: [],
+      scoreManual: {},
+      antiguedadAnios: undefined,
+      penalizacionGuardiaFija: 0,
+      activo: true,
     });
 
     refresh();
@@ -143,9 +161,13 @@ export function MedicosAdmin() {
       especialidad: m.especialidad ?? "",
       telefono: m.telefono ?? "",
       tipo: (m.tipo as any) || "SUPLENTE",
-      // si viene 9999 del store, lo volvemos undefined para editar cómodo
+      gremio: m.gremio ?? "SMU",
       prioridad: typeof m.prioridad === "number" && m.prioridad < 9999 ? m.prioridad : undefined,
-      activo: m.activo ?? true
+      sectoresHabilitados: m.sectoresHabilitados ?? [],
+      scoreManual: m.scoreManual ?? {},
+      antiguedadAnios: m.antiguedadAnios,
+      penalizacionGuardiaFija: m.penalizacionGuardiaFija ?? 0,
+      activo: m.activo ?? true,
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -179,7 +201,7 @@ export function MedicosAdmin() {
           />
         </div>
 
-        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
           <div className="field" style={{ margin: 0 }}>
             <label className="label">Tipo</label>
             <select
@@ -194,12 +216,24 @@ export function MedicosAdmin() {
           </div>
 
           <div className="field" style={{ margin: 0 }}>
+            <label className="label">Gremio</label>
+            <select
+              className="select"
+              value={String(form.gremio ?? "SMU")}
+              onChange={e => setForm(f => ({ ...f, gremio: e.target.value as MedicoGremio }))}
+            >
+              <option value="SMU">SMU (no quirúrgico)</option>
+              <option value="SAQ">SAQ (quirúrgico)</option>
+            </select>
+          </div>
+
+          <div className="field" style={{ margin: 0 }}>
             <label className="label">Prioridad (1 = primero)</label>
             <input
               className="input"
               type="number"
               min={1}
-              placeholder="(vacío = sin prioridad)"
+              placeholder="(sin prioridad)"
               value={form.prioridad === undefined || form.prioridad === null ? "" : String(form.prioridad)}
               onChange={e => {
                 const v = e.target.value;
@@ -258,6 +292,89 @@ export function MedicosAdmin() {
           </select>
         </div>
 
+        {/* Sectores habilitados */}
+        <div className="field">
+          <label className="label">Sectores habilitados</label>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "8px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)" }}>
+            {sectores.map(s => {
+              const checked = (form.sectoresHabilitados ?? []).includes(s.id);
+              return (
+                <label key={s.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12.5, cursor: "pointer",
+                  padding: "3px 10px", borderRadius: 20,
+                  background: checked ? "rgba(21,101,192,0.12)" : "var(--surface)",
+                  border: `1px solid ${checked ? "rgba(21,101,192,0.30)" : "var(--border-2)"}`,
+                  color: checked ? "var(--blue)" : "var(--muted)", fontWeight: checked ? 600 : 400,
+                  transition: "all 0.12s",
+                }}>
+                  <input
+                    type="checkbox"
+                    style={{ display: "none" }}
+                    checked={checked}
+                    onChange={e => {
+                      const curr = form.sectoresHabilitados ?? [];
+                      setForm(f => ({
+                        ...f,
+                        sectoresHabilitados: e.target.checked
+                          ? [...curr, s.id]
+                          : curr.filter(x => x !== s.id),
+                      }));
+                    }}
+                  />
+                  {s.nombre}
+                </label>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Score manual */}
+        <div style={{ padding: "12px", borderRadius: 10, background: "var(--surface-2)", border: "1px solid var(--border-2)", marginTop: 4 }}>
+          <p style={{ margin: "0 0 10px", fontSize: 12, fontWeight: 700, color: "var(--text)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Scoring manual</p>
+          <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            {([
+              { key: "tecnico", label: "Técnico (peso 64)", options: [["","—"],["EXCELENTE","Excelente"],["BUENO","Bueno"],["REGULAR","Regular (penaliza)"],["MALO","Malo (descalifica)"]] },
+              { key: "postgrado", label: "Postgrado/Residencia (peso 49)", options: [["","—"],["COMPLETO","Completo"],["EN_CURSO","En curso"],["NO_REALIZA","No realiza"]] },
+              { key: "relacionamiento", label: "Relacionamiento (peso 36)", options: [["","—"],["BUENO","Bueno"],["REGULAR","Regular (penaliza)"],["MALO","Malo (penaliza)"]] },
+              { key: "quejas", label: "Quejas (peso 25)", options: [["","—"],["NINGUNA","Ninguna o aisladas"],["RECURRENTES","Recurrentes (penaliza)"],["FRECUENTES","Frecuentes (penaliza)"]] },
+            ] as const).map(({ key, label, options }) => (
+              <div key={key} className="field" style={{ margin: 0 }}>
+                <label className="label">{label}</label>
+                <select
+                  className="select"
+                  value={(form.scoreManual as any)?.[key] ?? ""}
+                  onChange={e => setForm(f => ({ ...f, scoreManual: { ...f.scoreManual, [key]: e.target.value || undefined } }))}
+                >
+                  {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+              </div>
+            ))}
+          </div>
+          <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
+            <div className="field" style={{ margin: 0 }}>
+              <label className="label">Antigüedad en la institución (años)</label>
+              <input
+                className="input"
+                type="number"
+                min={0}
+                placeholder="ej: 5"
+                value={form.antiguedadAnios === undefined ? "" : String(form.antiguedadAnios)}
+                onChange={e => setForm(f => ({ ...f, antiguedadAnios: e.target.value ? Number(e.target.value) : undefined }))}
+              />
+            </div>
+            <div className="field" style={{ margin: 0 }}>
+              <label className="label">Penalización guardia fija (pts)</label>
+              <input
+                className="input"
+                type="number"
+                min={0}
+                placeholder="0 = sin penalización"
+                value={form.penalizacionGuardiaFija === undefined ? "" : String(form.penalizacionGuardiaFija)}
+                onChange={e => setForm(f => ({ ...f, penalizacionGuardiaFija: e.target.value ? Number(e.target.value) : 0 }))}
+              />
+            </div>
+          </div>
+        </div>
+
         <button className="btn" onClick={onSave}>Guardar</button>
       </div>
 
@@ -300,15 +417,20 @@ export function MedicosAdmin() {
                 <b>{m.displayName}</b>
                 <span className="pill">{m.userId}</span>
                 <span className="pill">{String(m.tipo ?? "SUPLENTE")}</span>
+                <span className="pill" style={{ background: m.gremio === "SAQ" ? "rgba(21,101,192,0.10)" : "rgba(38,166,154,0.10)", color: m.gremio === "SAQ" ? "var(--blue)" : "var(--teal-dark)" }}>{m.gremio ?? "SMU"}</span>
                 <span className="pill">Prio: {prioLabel(m.prioridad)}</span>
                 <span className="pill">{(m.activo ?? true) ? "ACTIVO" : "INACTIVO"}</span>
               </div>
 
               <div className="sub" style={{ marginTop: 6 }}>
-                {m.especialidad ? `Especialidad: ${m.especialidad} · ` : ""}
+                {m.especialidad ? `${m.especialidad} · ` : ""}
                 {m.funcionario ? `Func: ${m.funcionario} · ` : ""}
-                {m.cedula ? `CI: ${m.cedula} · ` : ""}
-                {m.telefono ? `Tel: ${m.telefono}` : ""}
+                {m.cedula ? `CI: ${m.cedula}` : ""}
+                {(m.sectoresHabilitados ?? []).length > 0 && (
+                  <span style={{ display: "block", marginTop: 3, fontSize: 11, color: "var(--subtle)" }}>
+                    Sectores: {(m.sectoresHabilitados ?? []).join(", ")}
+                  </span>
+                )}
               </div>
 
               <div className="row" style={{ marginTop: 10, gap: 10 }}>

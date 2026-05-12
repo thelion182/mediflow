@@ -83,6 +83,7 @@ export type SystemConfig = {
     defaultSinVerMin: number;
     defaultSinResponderMin: number;
     defaultPrioridad: "NORMAL" | "ALTA";
+    plazoDevolusionHoras: number; // plazo para que el médico devuelva una guardia aceptada
   };
   scoring: {
     enabled: boolean;

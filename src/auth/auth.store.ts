@@ -19,6 +19,10 @@ const DEMO_ACCOUNTS: Array<{ ids: string[]; user: User }> = [
     ids: ["1001", "F-1001"],
     user: { userId: "F-1001", displayName: "Coordinador (Demo)", role: "COORDINADOR", funcionario: "1001" }
   },
+  {
+    ids: ["3001", "F-3001"],
+    user: { userId: "F-3001", displayName: "Consulta PD (Demo)", role: "CONSULTA_PD", funcionario: "3001" }
+  },
 ];
 
 function onlyDigits(s: string) {

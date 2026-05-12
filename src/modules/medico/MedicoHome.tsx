@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { authStore } from "../../auth/auth.store";
 import { convocatoriaStore } from "../convocatorias/convocatoria.store";
+import { configStore } from "../config/config.store";
 import { AppShell } from "../../ui/AppShell";
 
-type InvEstado = "EN_ESPERA" | "ENVIADA" | "VISTA" | "ACEPTO" | "RECHAZO" | "VENCIDA" | "SIN_RESPUESTA";
+type InvEstado = "EN_ESPERA" | "ENVIADA" | "VISTA" | "ACEPTO" | "RECHAZO" | "VENCIDA" | "SIN_RESPUESTA" | "CUBIERTA_X_OTRO";
 
 const SUPLENCIAS_WA = "+59899737934";
 
@@ -42,27 +43,31 @@ function Badge({ label, kind }: { label: string; kind: BadgeKind }) {
 }
 
 function convBadge(convEstado: string, invEstado: InvEstado, isAssigned: boolean, asgEstado?: string): { label: string; kind: BadgeKind } {
-  if (convEstado === "CANCELADA")      return { label: "Cancelada",    kind: "BAD"  };
-  if (invEstado === "VENCIDA")         return { label: "Vencida",      kind: "WARN" };
-  if (invEstado === "SIN_RESPUESTA")   return { label: "Sin cupo",     kind: "MUTED"};
+  if (convEstado === "CANCELADA")           return { label: "Cancelada",      kind: "BAD"  };
+  if (invEstado === "CUBIERTA_X_OTRO")      return { label: "Cubierta",        kind: "MUTED"};
+  if (invEstado === "VENCIDA")              return { label: "Vencida",         kind: "WARN" };
+  if (invEstado === "SIN_RESPUESTA")        return { label: "Sin cupo",        kind: "MUTED"};
   if (isAssigned) {
-    if (asgEstado === "CUMPLIDA")      return { label: "Cumplida",     kind: "OK"   };
-    if (asgEstado === "NO_CUMPLIDA")   return { label: "No cumplida",  kind: "BAD"  };
-    return                                    { label: "Confirmada",   kind: "OK"   };
+    if (asgEstado === "CUMPLIDA")           return { label: "Cumplida",        kind: "OK"   };
+    if (asgEstado === "NO_CUMPLIDA")        return { label: "No cumplida",     kind: "BAD"  };
+    if (asgEstado === "DEVOLUCION_PENDIENTE") return { label: "Dev. pendiente", kind: "WARN" };
+    return                                        { label: "Confirmada",       kind: "OK"   };
   }
-  if (invEstado === "RECHAZO")         return { label: "Rechazada",    kind: "BAD"  };
-  if (invEstado === "ACEPTO")          return { label: "Aceptada",     kind: "OK"   };
-  if (invEstado === "VISTA")           return { label: "Vista",        kind: "INFO" };
-  return                                      { label: "Pendiente",    kind: "INFO" };
+  if (invEstado === "RECHAZO")              return { label: "Rechazada",       kind: "BAD"  };
+  if (invEstado === "ACEPTO")              return { label: "Aceptada",        kind: "OK"   };
+  if (invEstado === "VISTA")               return { label: "Vista",           kind: "INFO" };
+  return                                          { label: "Pendiente",       kind: "INFO" };
 }
 
 // ── ConvCard para médico ──────────────────────────────────────────────────
-function MedicoCard({ item, showActions, onAceptar, onRechazar, onWA }: {
+function MedicoCard({ item, showActions, canDevolver, onAceptar, onRechazar, onWA, onDevolver }: {
   item: { c: any; inv: any; myAsg?: any; isAssigned: boolean };
   showActions: boolean;
+  canDevolver?: boolean;
   onAceptar: (id: string) => void;
   onRechazar: (id: string) => void;
   onWA: (id: string, accion: "ACEPTO" | "RECHAZO") => void;
+  onDevolver?: (convId: string, asgId: string) => void;
 }) {
   const c   = item.c;
   const inv = item.inv as { estado: InvEstado; respondedAt?: string };
@@ -128,6 +133,28 @@ function MedicoCard({ item, showActions, onAceptar, onRechazar, onWA }: {
           </p>
         )}
 
+        {/* Cubierta x otro aviso */}
+        {inv.estado === "CUBIERTA_X_OTRO" && (
+          <div style={{
+            padding: "7px 12px", borderRadius: 8, marginBottom: 10,
+            background: "rgba(100,116,139,0.08)", border: "1px solid rgba(100,116,139,0.20)",
+            fontSize: 12, color: "var(--muted)",
+          }}>
+            Esta guardia ya fue cubierta por otro médico. No se requiere tu respuesta.
+          </div>
+        )}
+
+        {/* Devolución pendiente aviso */}
+        {item.myAsg?.estado === "DEVOLUCION_PENDIENTE" && (
+          <div style={{
+            padding: "7px 12px", borderRadius: 8, marginBottom: 10,
+            background: "rgba(217,119,6,0.07)", border: "1px solid rgba(217,119,6,0.25)",
+            fontSize: 12, color: "rgb(150,80,0)",
+          }}>
+            Solicitaste devolver esta guardia. Pendiente de aprobación por coordinación.
+          </div>
+        )}
+
         {/* Actions */}
         {isPending && (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -149,6 +176,18 @@ function MedicoCard({ item, showActions, onAceptar, onRechazar, onWA }: {
               onMouseEnter={e => (e.currentTarget.style.background = "rgba(37,211,102,0.18)")}
               onMouseLeave={e => (e.currentTarget.style.background = "rgba(37,211,102,0.10)")}
             >WhatsApp: Acepto</button>
+          </div>
+        )}
+
+        {/* Devolver guardia */}
+        {canDevolver && item.myAsg?.estado === "CONFIRMADA" && onDevolver && (
+          <div style={{ marginTop: isPending ? 8 : 0 }}>
+            <button
+              onClick={() => onDevolver(c.id, item.myAsg.id)}
+              style={actionBtn("217,119,6")}
+              onMouseEnter={e => (e.currentTarget.style.background = "rgba(217,119,6,0.18)")}
+              onMouseLeave={e => (e.currentTarget.style.background = "rgba(217,119,6,0.10)")}
+            >↩ Devolver guardia</button>
           </div>
         )}
       </div>
@@ -236,10 +275,19 @@ export function MedicoHome() {
     }).filter(Boolean) as Array<{ c: any; inv: any; myAsg?: any; isAssigned: boolean }>;
   }, [all, session.userId]);
 
+  const plazoDev = configStore.get().convocatorias?.plazoDevolusionHoras ?? 24;
+
   const pendientes  = useMemo(() => mine.filter(x => (x.inv.estado === "ENVIADA" || x.inv.estado === "VISTA") && x.c.estado !== "CANCELADA"), [mine]);
   const confirmadas = useMemo(() => mine.filter(x => x.c.estado !== "CANCELADA" && x.isAssigned), [mine]);
   const rechazadas  = useMemo(() => mine.filter(x => x.c.estado !== "CANCELADA" && x.inv.estado === "RECHAZO"), [mine]);
+  const cubiertasXOtro = useMemo(() => mine.filter(x => x.inv.estado === "CUBIERTA_X_OTRO"), [mine]);
   const noDisp      = useMemo(() => mine.filter(x => x.c.estado === "CANCELADA" || x.inv.estado === "VENCIDA" || x.inv.estado === "SIN_RESPUESTA"), [mine]);
+
+  function canDevolver(item: { c: any; myAsg?: any }) {
+    if (!item.myAsg || item.myAsg.estado !== "CONFIRMADA") return false;
+    const horasHastaInicio = (new Date(item.c.inicio).getTime() - Date.now()) / 3_600_000;
+    return horasHastaInicio > plazoDev;
+  }
 
   // Auto-mark vista
   const pendientesKey = pendientes.map(x => `${x.c.id}:${x.inv.estado}`).join("|");
@@ -282,6 +330,12 @@ export function MedicoHome() {
     const msg = `Hola Suplencias, soy ${session.displayName} (${session.userId}). Respecto a la convocatoria ${convId}: ${accion}. Lo registro también en Mediflow.`;
     window.open(waLink(SUPLENCIAS_WA, msg), "_blank");
   }
+  function devolver(convId: string, asgId: string) {
+    const motivo = window.prompt("Motivo de la devolución (obligatorio):");
+    if (!motivo?.trim()) return;
+    convocatoriaStore.solicitarDevolucion(convId, asgId, motivo.trim());
+    setTick(t => t + 1);
+  }
 
   return (
     <AppShell>
@@ -302,10 +356,10 @@ export function MedicoHome() {
         {/* KPI chips */}
         <div style={{ display: "flex", gap: 10, marginBottom: 24, flexWrap: "wrap" }}>
           {[
-            { label: "Pendientes",   count: pendientes.length,  rgb: "21,101,192"  },
-            { label: "Confirmadas",  count: confirmadas.length,  rgb: "22,163,74"   },
-            { label: "Rechazadas",   count: rechazadas.length,   rgb: "220,38,38"   },
-            { label: "Sin cupo",     count: noDisp.length,       rgb: "100,116,139" },
+            { label: "Pendientes",   count: pendientes.length,     rgb: "21,101,192"  },
+            { label: "Confirmadas",  count: confirmadas.length,     rgb: "22,163,74"   },
+            { label: "Rechazadas",   count: rechazadas.length,      rgb: "220,38,38"   },
+            { label: "Sin cupo",     count: noDisp.length,          rgb: "100,116,139" },
           ].map(k => (
             <div key={k.label} style={{
               display: "flex", alignItems: "center", gap: 8,
@@ -335,9 +389,21 @@ export function MedicoHome() {
           <Section title="Confirmadas" count={confirmadas.length} rgb="22,163,74"
             empty="No tenés guardias confirmadas.">
             {confirmadas.map(item => (
-              <MedicoCard key={item.c.id} item={item} showActions={false} onAceptar={aceptar} onRechazar={rechazar} onWA={onWA} />
+              <MedicoCard key={item.c.id} item={item} showActions={false}
+                canDevolver={canDevolver(item)}
+                onAceptar={aceptar} onRechazar={rechazar} onWA={onWA} onDevolver={devolver} />
             ))}
           </Section>
+
+          {cubiertasXOtro.length > 0 && (
+            <Section title="Cubiertas por otro médico" count={cubiertasXOtro.length} rgb="100,116,139"
+              empty="">
+              {cubiertasXOtro.map(item => (
+                <MedicoCard key={item.c.id} item={item} showActions={false}
+                  onAceptar={aceptar} onRechazar={rechazar} onWA={onWA} />
+              ))}
+            </Section>
+          )}
 
           <Section title="Rechazadas" count={rechazadas.length} rgb="220,38,38"
             empty="No rechazaste convocatorias.">

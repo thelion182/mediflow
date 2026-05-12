@@ -37,7 +37,11 @@ const NAV: Record<Role, NavItem[]> = {
     { label: "Administración",    path: "/admin",                      rgb: "38,166,154",  dividerBefore: true },
   ],
   MEDICO: [
-    { label: "Mis Convocatorias", path: "/medico",                     rgb: "21,101,192",  exact: true },
+    { label: "Mis Convocatorias", path: "/medico",       rgb: "21,101,192", exact: true },
+    { label: "Parte Diario",      path: "/parte-diario", rgb: "109,191,60", dividerBefore: true },
+  ],
+  CONSULTA_PD: [
+    { label: "Parte Diario",      path: "/parte-diario", rgb: "109,191,60", exact: true },
   ],
 };
 
@@ -46,6 +50,7 @@ const ROLE_LABEL: Record<Role, string> = {
   ADMIN:       "Administrador",
   COORDINADOR: "Coordinador",
   MEDICO:      "Médico",
+  CONSULTA_PD: "Consulta PD",
 };
 
 // ── Icons (SVG inline) ──────────────────────────────────────────────────

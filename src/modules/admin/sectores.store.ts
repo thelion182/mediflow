@@ -1,7 +1,7 @@
 import { storage } from "../../core/storage";
 import type { Sector } from "./sectores.types";
 
-const KEY = "mediflow.catalogo.sectores.v1";
+const KEY = "mediflow.catalogo.sectores.v2";
 
 function slugify(input: string) {
   return (input || "")
@@ -13,12 +13,14 @@ function slugify(input: string) {
 }
 
 const DEFAULT: Sector[] = [
-  { id: "PISO", nombre: "Piso", activo: true },
-  { id: "PUERTA_EMERGENCIA", nombre: "Puerta de Emergencia", activo: true },
-  { id: "POLICLINICAS", nombre: "Policlínicas", activo: true },
-  { id: "RETENES", nombre: "Retenes", activo: true },
-  { id: "DOMICILIOS", nombre: "Domicilios", activo: true },
-  { id: "AMBULANCIAS", nombre: "Ambulancias", activo: true }
+  { id: "CAI",              nombre: "CAI",                        activo: true },
+  { id: "GUARDIA_FILIAL",   nombre: "Guardia Filial",             activo: true },
+  { id: "PISO",             nombre: "Piso",                       activo: true },
+  { id: "POLICLINICA",      nombre: "Policlínica",                activo: true },
+  { id: "PUERTA_EMERGENCIA",nombre: "Puerta de Emergencia",       activo: true },
+  { id: "REP_MEDICAMENTOS", nombre: "Repetición de medicamentos", activo: true },
+  { id: "RETEN",            nombre: "Retén",                      activo: true },
+  { id: "URG_DOMICILIARIA", nombre: "Urgencia Domiciliaria",      activo: true },
 ];
 
 export const sectoresStore = {

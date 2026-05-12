@@ -19,6 +19,7 @@ const DEFAULT_USERS: UserRecord[] = [
   { userId: "F-9999",  displayName: "Super Admin",        role: "SUPER_ADMIN",  activo: true, funcionario: "9999"  },
   { userId: "F-2001",  displayName: "Administrador",      role: "ADMIN",        activo: true, funcionario: "2001"  },
   { userId: "F-1001",  displayName: "Coordinador",        role: "COORDINADOR",  activo: true, funcionario: "1001"  },
+  { userId: "F-3001",  displayName: "Consulta PD (Demo)", role: "CONSULTA_PD",  activo: true, funcionario: "3001"  },
 ];
 
 type UsersConfig = { defaultPassword: string };

@@ -750,6 +750,15 @@ export function SuplenciasDashboard() {
   const session      = authStore.getSession();
   const isSuperAdmin = session?.role === "SUPER_ADMIN";
 
+  function aprobarDev(convId: string, asgId: string) {
+    convocatoriaStore.aprobarDevolucion(convId, asgId, session?.userId ?? "");
+    setTick(t => t + 1);
+  }
+  function rechazarDev(convId: string, asgId: string) {
+    convocatoriaStore.rechazarDevolucion(convId, asgId);
+    setTick(t => t + 1);
+  }
+
   function handleDelete(c: any) {
     const label = `${c.sector}${c.sede ? " · " + c.sede : ""} — ${new Date(c.inicio).toLocaleDateString("es-UY")}`;
     const ok = window.confirm(
@@ -779,6 +788,16 @@ export function SuplenciasDashboard() {
     return map;
   }, [tick]);
   const medicoName = (id: string) => medicosById.get(id) ?? id;
+
+  const devolucionesPendientes = useMemo(() => {
+    const items: { c: any; asg: any }[] = [];
+    for (const c of all) {
+      for (const asg of c.asignaciones ?? []) {
+        if (asg.estado === "DEVOLUCION_PENDIENTE") items.push({ c, asg });
+      }
+    }
+    return items;
+  }, [all]);
 
   const secuencialesActivas = useMemo(() => {
     void uiTick;
@@ -826,6 +845,67 @@ export function SuplenciasDashboard() {
 
         {/* ── Main column ── */}
         <div style={{ flex: 1, minWidth: 0, display: "grid", gap: 16 }}>
+
+          {/* Devoluciones pendientes */}
+          {devolucionesPendientes.length > 0 && (
+            <div style={{
+              background: "rgba(217,119,6,0.05)", border: "1px solid rgba(217,119,6,0.25)",
+              borderRadius: 14, padding: "14px 16px",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: "rgb(217,119,6)" }} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>
+                  Devoluciones pendientes · {devolucionesPendientes.length}
+                </span>
+              </div>
+              <div style={{ display: "grid", gap: 8 }}>
+                {devolucionesPendientes.map(({ c, asg }) => {
+                  const fmtDt = (iso: string) => new Date(iso).toLocaleString("es-UY", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+                  return (
+                    <div key={`${c.id}-${asg.id}`} style={{
+                      display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+                      padding: "10px 14px", borderRadius: 10,
+                      background: "var(--surface)", border: "1px solid rgba(217,119,6,0.25)",
+                    }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: "var(--text)" }}>
+                          {c.sector}{c.sede ? ` · ${c.sede}` : ""}
+                        </div>
+                        <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
+                          {medicoName(asg.medicoId)} · {fmtDt(c.inicio)}
+                        </div>
+                        {asg.devolucionMotivo && (
+                          <div style={{ fontSize: 11.5, color: "rgb(150,80,0)", marginTop: 4, fontStyle: "italic" }}>
+                            Motivo: {asg.devolucionMotivo}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                        <button
+                          onClick={() => aprobarDev(c.id, asg.id)}
+                          style={{
+                            padding: "6px 14px", borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: "pointer",
+                            border: "1px solid rgba(22,163,74,0.35)", background: "rgba(22,163,74,0.10)", color: "rgb(22,163,74)",
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.background = "rgba(22,163,74,0.20)")}
+                          onMouseLeave={e => (e.currentTarget.style.background = "rgba(22,163,74,0.10)")}
+                        >✓ Aprobar</button>
+                        <button
+                          onClick={() => rechazarDev(c.id, asg.id)}
+                          style={{
+                            padding: "6px 14px", borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: "pointer",
+                            border: "1px solid rgba(220,38,38,0.30)", background: "rgba(220,38,38,0.08)", color: "rgb(220,38,38)",
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.background = "rgba(220,38,38,0.18)")}
+                          onMouseLeave={e => (e.currentTarget.style.background = "rgba(220,38,38,0.08)")}
+                        >✕ Rechazar</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Sequential live panel */}
           {secuencialesActivas.length > 0 && (

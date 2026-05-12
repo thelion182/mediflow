@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tutorial: Contribuir a MediFlow desde VS Code</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    line-height: 1.7;
+    color: #1e293b;
+    background: #fff;
+    padding: 48px;
+    max-width: 860px;
+    margin: 0 auto;
+  }
+
+  /* ── Portada ── */
+  .cover {
+    text-align: center;
+    padding: 48px 0 40px;
+    border-bottom: 2px solid #e2e8f0;
+    margin-bottom: 40px;
+  }
+  .cover .badge {
+    display: inline-block;
+    background: #1565c0;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 4px 14px;
+    border-radius: 20px;
+    margin-bottom: 18px;
+  }
+  .cover h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.25;
+    margin-bottom: 10px;
+  }
+  .cover .subtitle {
+    font-size: 15px;
+    color: #64748b;
+  }
+  .cover .meta {
+    margin-top: 18px;
+    font-size: 12px;
+    color: #94a3b8;
+  }
+
+  /* ── Pasos ── */
+  .step {
+    margin-bottom: 36px;
+    padding-bottom: 36px;
+    border-bottom: 1px solid #f1f5f9;
+    page-break-inside: avoid;
+  }
+  .step:last-child { border-bottom: none; }
+
+  .step-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 14px;
+  }
+  .step-number {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    background: #1565c0;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 700;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .step h2 {
+    font-size: 17px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.3;
+    padding-top: 6px;
+  }
+
+  .step p { margin-bottom: 10px; color: #334155; }
+  .step p:last-child { margin-bottom: 0; }
+
+  ol, ul {
+    padding-left: 20px;
+    margin: 8px 0 10px;
+    color: #334155;
+  }
+  ol li, ul li { margin-bottom: 6px; }
+
+  /* ── Código ── */
+  code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    background: #f1f5f9;
+    color: #1e40af;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  pre {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: 16px 18px;
+    border-radius: 10px;
+    margin: 10px 0;
+    overflow-x: auto;
+    line-height: 1.6;
+  }
+
+  /* ── Aviso importante ── */
+  .warning {
+    background: #fefce8;
+    border-left: 4px solid #eab308;
+    padding: 12px 16px;
+    border-radius: 0 8px 8px 0;
+    margin: 10px 0;
+    font-size: 13px;
+    color: #713f12;
+  }
+  .warning strong { color: #92400e; }
+
+  /* ── Tabla ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 13px;
+  }
+  th {
+    background: #1565c0;
+    color: #fff;
+    text-align: left;
+    padding: 9px 14px;
+    font-weight: 600;
+  }
+  td { padding: 8px 14px; border-bottom: 1px solid #e2e8f0; color: #334155; }
+  tr:last-child td { border-bottom: none; }
+  tr:nth-child(even) td { background: #f8fafc; }
+
+  /* ── Diagrama ASCII ── */
+  .diagram {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    padding: 16px 18px;
+    border-radius: 10px;
+    margin: 10px 0;
+    line-height: 1.7;
+    color: #334155;
+  }
+
+  /* ── Sección final ── */
+  .help-box {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-top: 8px;
+  }
+  .help-box h3 { font-size: 14px; color: #1e40af; margin-bottom: 8px; }
+  .help-box ul { color: #1e40af; }
+
+  /* ── Print ── */
+  @media print {
+    body { padding: 24px 32px; font-size: 13px; }
+    .cover { padding: 24px 0 28px; }
+    .step { margin-bottom: 24px; padding-bottom: 24px; }
+    pre { font-size: 11.5px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="badge">MediFlow — Guía de colaboración</div>
+  <h1>Contribuir al proyecto<br>desde Visual Studio Code</h1>
+  <p class="subtitle">Paso a paso para nuevos colaboradores · Sin usar la terminal</p>
+  <p class="meta">Proyecto: github.com/thelion182/mediflow · Mayo 2026</p>
+</div>
+
+<!-- Paso 1 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-number">1</div>
+    <h2>Instalar lo necesario</h2>
+  </div>
+  <p>Instalar estos tres programas en orden y reiniciar la computadora cuando terminen:</p>
+  <ol>
+    <li><strong>Git</strong> → <code>https://git-scm.com/downloads</code> (opciones por defecto)</li>
+    <li><strong>Node.js LTS</strong> → <code>https://nodejs.org</code></li>
+    <li><strong>Visual Studio Code</strong> → <code>https://code.visualstudio.com</code></li>
+  </ol>
+</div>
+
+<!-- Paso 2 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-number">2</div>
+    <h2>Instalar la extensión de GitHub en VS Code</h2>
+  </div>
+  <ol>
+    <li>Abrir VS Code</li>
+    <li>Clic en el ícono de extensiones en la barra izquierda (parece 4 cuadraditos)</li>
+    <li>Buscar <strong>"GitHub Pull Requests"</strong></li>
+    <li>Instalar la extensión oficial de <strong>GitHub</strong> (autor: GitHub)</li>
+  </ol>
+</div>
+
+<!-- Paso 3 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-number">3</div>
+    <h2>Conectar VS Code con la cuenta de GitHub</h2>
+  </div>
+  <ol>
+    <li>En VS Code, clic en el ícono de <strong>cuentas</strong> (abajo a la izquierda, parece una persona)</li>
+    <li>Clic en <strong>"Sign in with GitHub"</strong></li>
+    <li>Se abre el navegador → iniciar sesión en GitHub → clic en <strong>Authorize</strong></li>
+    <li>Volver a VS Code — ya queda conectado, no necesita tokens ni contraseñas</li>
+  </ol>
+</div>
+
+<!-- Paso 4 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-number">4</div>
+    <h2>Aceptar la invitación al repositorio</h2>
+  </div>
+  <ol>
+    <li>Revisar el email de GitHub con asunto: <em>"[thelion182] invited you to collaborate"</em></li>
+    <li>Hacer clic en el botón verde <strong>Accept invitation</strong></li>
+    <li>Si no llega el mail, buscar en spam o entrar directamente a:</li>
+  </ol>
+  <pre>https://github.com/thelion182/mediflow/invitations</pre>
+</div>
+
+<!-- Paso 5 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-number">5</div>
+    <h2>Clonar el proyecto desde VS Code</h2>
+  </div>
+  <ol>
+    <li>En VS Code, abrir la paleta de comandos: <code>Ctrl + Shift + P</code></li>
+    <li>Escribir <code>Git: Clone</code> y seleccionarlo</li>
+    <li>Pegar la URL del repositorio:</li>
+  </ol>
+  <pre>https://github.com/thelion182/mediflow</pre>
+  <ol start="4">
+    <li>Elegir la carpeta donde guardar el proyecto (ej: <code>C:\Proyectos</code>)</li>
+    <li>Cuando VS Code pregunte <em>"¿Abrir el repositorio clonado?"</em> → clic en <strong>Abrir</strong></li>
+  </ol>
+</div>
+
+<!-- Paso 6 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-number">6</div>
+    <h2>Instalar dependencias y levantar el proyecto</h2>
+  </div>
+  <ol>
+    <li>Abrir la terminal integrada de VS Code: <code>Ctrl + `</code> (tecla del acento grave, arriba del Tab)</li>
+    <li>Ejecutar:</li>
+  </ol>
+  <pre>npm install</pre>
+  <ol start="3">
+    <li>Cuando termine, ejecutar:</li>
+  </ol>
+  <pre>npm run dev</pre>
+  <ol start="4">
+    <li>Hacer clic en el link <code>http://localhost:5173</code> que aparece — se abre MediFlow en el navegador</li>
+  </ol>
+</div>
+
+<!-- Paso 7 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-number">7</div>
+    <h2>Crear su propia rama de trabajo</h2>
+  </div>
+  <div class="warning">
+    <strong>⚠ Importante:</strong> nunca modificar <code>main</code> directamente. Siempre trabajar en una rama propia.
+  </div>
+  <p style="margin-top:12px">En VS Code esto es muy visual:</p>
+  <ol>
+    <li>Mirar la <strong>barra de estado inferior</strong> — dice <code>main</code> a la izquierda</li>
+    <li>Hacer clic en ese <code>main</code></li>
+    <li>Seleccionar <strong>"+ Create new branch..."</strong></li>
+    <li>Escribir el nombre de la rama, por ejemplo: <code>feature/jp-parte-diario</code></li>
+    <li>Presionar Enter</li>
+  </ol>
+  <p>La barra inferior ahora muestra el nombre de la nueva rama. ✓</p>
+</div>
+
+<!-- Paso 8 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-number">8</div>
+    <h2>Editar archivos y guardar cambios (commit)</h2>
+  </div>
+  <ol>
+    <li>Editar los archivos necesarios desde el explorador de VS Code (barra izquierda)</li>
+    <li>Ir al ícono de <strong>control de código fuente</strong>: <code>Ctrl + Shift + G</code></li>
+    <li>Ver todos los archivos modificados en la lista</li>
+    <li>Hacer clic en <strong>+</strong> al lado de cada archivo para prepararlo (o el <strong>+</strong> grande para preparar todos)</li>
+    <li>Escribir un mensaje descriptivo en el campo de texto, por ejemplo:</li>
+  </ol>
+  <pre>feat: agregar columna sector en parte diario</pre>
+  <ol start="6">
+    <li>Clic en el botón azul <strong>"Commit"</strong> (o <code>Ctrl + Enter</code>)</li>
+  </ol>
+</div>
+
+<!-- Paso 9 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-number">9</div>
+    <h2>Subir los cambios a GitHub (push)</h2>
+  </div>
+  <ol>
+    <li>En el panel de control de código fuente, clic en <strong>"Publish Branch"</strong> (la primera vez) o <strong>"Sync Changes"</strong> (las siguientes)</li>
+    <li>Como ya inició sesión con GitHub en el Paso 3, sube automáticamente sin pedir contraseña</li>
+  </ol>
+  <p>También aparece un ícono de nube <strong>☁</strong> en la barra inferior para hacer push rápido.</p>
+</div>
+
+<!-- Paso 10 -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-number">10</div>
+    <h2>Pedir que integren los cambios (Pull Request)</h2>
+  </div>
+  <ol>
+    <li>Ir a <code>https://github.com/thelion182/mediflow</code> en el navegador</li>
+    <li>Aparece un banner amarillo <strong>"Compare &amp; pull request"</strong> → hacer clic</li>
+    <li>Escribir título y descripción de qué cambió y por qué</li>
+    <li>Clic en <strong>"Create pull request"</strong></li>
+  </ol>
+  <p><strong>Leon lo revisa y lo aprueba</strong> desde GitHub cuando esté listo.</p>
+</div>
+
+<!-- Referencia visual -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-number" style="background:#475569">📌</div>
+    <h2>Referencia visual — dónde está cada cosa en VS Code</h2>
+  </div>
+  <div class="diagram">┌─────────────────────────────────────────────────────┐
+│  BARRA LATERAL IZQUIERDA                             │
+│                                                      │
+│  📁  Explorador de archivos  →  editar código        │
+│  🔍  Buscar                  →  buscar texto         │
+│  🌿  Control de código       →  commits y push       │
+│  🧩  Extensiones             →  instalar plugins     │
+│                                                      │
+├─────────────────────────────────────────────────────┤
+│  BARRA INFERIOR                                      │
+│                                                      │
+│  [ 🌿 feature/jp-parte-diario ]  →  rama actual     │
+│  [ ☁ Sync Changes ]              →  push / pull     │
+└─────────────────────────────────────────────────────┘</div>
+</div>
+
+<!-- Tabla resumen -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-number" style="background:#475569">📋</div>
+    <h2>Flujo de trabajo diario — resumen</h2>
+  </div>
+  <table>
+    <thead>
+      <tr><th>Qué quiere hacer</th><th>Cómo en VS Code</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Ver qué archivos cambié</td><td>Ícono 🌿 en barra lateral → lista de cambios</td></tr>
+      <tr><td>Guardar cambio (commit)</td><td>Ctrl+Shift+G → escribir mensaje → Commit</td></tr>
+      <tr><td>Subir a GitHub</td><td>Botón "Sync Changes" en barra lateral o barra inferior</td></tr>
+      <tr><td>Bajar cambios de main</td><td>Barra inferior → clic en ☁ → Pull</td></tr>
+      <tr><td>Cambiar de rama</td><td>Clic en el nombre de rama en barra inferior</td></tr>
+      <tr><td>Crear nueva rama</td><td>Clic en rama actual → "+ Create new branch..."</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Si algo falla -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-number" style="background:#dc2626">!</div>
+    <h2>Si algo no funciona</h2>
+  </div>
+  <div class="help-box">
+    <h3>Problemas comunes y solución rápida</h3>
+    <ul>
+      <li><strong>No aparece "Publish Branch"</strong> → cerrar y reabrir VS Code</li>
+      <li><strong>Pide usuario y contraseña</strong> → repetir el Paso 3 (Sign in with GitHub)</li>
+      <li><strong>Error al hacer npm install</strong> → verificar que Node.js está instalado (<code>node --version</code> en terminal)</li>
+      <li><strong>Conflicto de merge</strong> → avisarle a Leon antes de intentar resolverlo solo</li>
+    </ul>
+  </div>
+</div>
+
+</body>
+</html>

@@ -11,10 +11,11 @@ import { sedesStore } from "../admin/sedes.store";
 import { configStore } from "../config/config.store";
 import { CANAL_META } from "../config/config.types";
 import type { Canal } from "./convocatoria.types";
-import type { MedicoTipo } from "../admin/medicos.types";
+import type { MedicoTipo, MedicoGremio } from "../admin/medicos.types";
 
-type ModoEnvio  = "MASIVO" | "SECUENCIAL";
-type TipoFiltro = "TODOS" | MedicoTipo;
+type ModoEnvio    = "MASIVO" | "SECUENCIAL";
+type TipoFiltro   = "TODOS" | MedicoTipo;
+type GremioFiltro = "TODOS" | MedicoGremio;
 type PrioMode   = "SCORING" | "MANUAL";
 
 const TIPO_RGB: Record<MedicoTipo, string> = {
@@ -164,6 +165,7 @@ export function NuevaConvocatoria() {
   // ── Filtros de médicos ─────────────────────────────────────────────────
   const [qMedico,      setQMedico]      = useState("");
   const [tipoSel,      setTipoSel]      = useState<TipoFiltro>("TODOS");
+  const [gremioSel,    setGremioSel]    = useState<GremioFiltro>("TODOS");
   const [cargoSel,     setCargoSel]     = useState<string>("TODOS");
   const [prioOverride, setPrioOverride] = useState<Record<string, number | undefined>>({});
   const [dest, setDest] = useState<Record<string, boolean>>({});
@@ -185,6 +187,16 @@ export function NuevaConvocatoria() {
       c.TODOS++;
       const t = (m as any).tipo ?? "SUPLENTE";
       c[t] = (c[t] ?? 0) + 1;
+    }
+    return c;
+  }, [medicosOrdenados]);
+
+  const countByGremio = useMemo(() => {
+    const c: Record<string, number> = { TODOS: 0, SAQ: 0, SMU: 0 };
+    for (const m of medicosOrdenados) {
+      c.TODOS++;
+      const g = (m as any).gremio ?? "SMU";
+      c[g] = (c[g] ?? 0) + 1;
     }
     return c;
   }, [medicosOrdenados]);
@@ -230,10 +242,23 @@ export function NuevaConvocatoria() {
     return 9999;
   }
 
+  // ID del sector seleccionado (undefined cuando es "Otro" o no coincide con catálogo)
+  const sectorIdSel = useMemo(() => {
+    if (sectorSel === OTRO) return undefined;
+    return sectoresActivos.find((s: any) => s.nombre === sectorSel)?.id as string | undefined;
+  }, [sectorSel, sectoresActivos]);
+
   const medicosVisibles = useMemo(() => {
     let list = medicosOrdenados;
     if (tipoSel !== "TODOS")    list = list.filter((m: any) => (m.tipo ?? "SUPLENTE") === tipoSel);
+    if (gremioSel !== "TODOS")  list = list.filter((m: any) => (m.gremio ?? "SMU") === gremioSel);
     if (cargoSel !== "TODOS")   list = list.filter((m: any) => cargoOf(m) === cargoSel);
+    if (sectorIdSel) {
+      list = list.filter((m: any) => {
+        const hab: string[] = m.sectoresHabilitados ?? [];
+        return hab.length === 0 || hab.includes(sectorIdSel);
+      });
+    }
     if (qMedico.trim()) {
       const q = qMedico.trim().toLowerCase();
       list = list.filter((m: any) =>
@@ -248,7 +273,7 @@ export function NuevaConvocatoria() {
       const pb = prioEff(b.userId, b.prioridad);
       return pa !== pb ? pa - pb : String(a.displayName).localeCompare(String(b.displayName));
     });
-  }, [medicosOrdenados, tipoSel, cargoSel, qMedico, JSON.stringify(prioOverride)]);
+  }, [medicosOrdenados, tipoSel, gremioSel, cargoSel, sectorIdSel, qMedico, JSON.stringify(prioOverride)]);
 
   const destinatarios = useMemo(() =>
     medicosVisibles.map((m: any) => m.userId).filter(id => !!dest[id]),
@@ -666,6 +691,26 @@ export function NuevaConvocatoria() {
                 </div>
               </div>
 
+              {/* Gremio chips */}
+              <div>
+                <label style={lblStyle}>Gremio</label>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {([
+                    { key: "TODOS" as GremioFiltro, label: `Todos (${countByGremio.TODOS})`,    rgb: "100,116,139" },
+                    { key: "SMU"   as GremioFiltro, label: `SMU (${countByGremio.SMU ?? 0})`,   rgb: "21,101,192"  },
+                    { key: "SAQ"   as GremioFiltro, label: `SAQ (${countByGremio.SAQ ?? 0})`,   rgb: "217,119,6"   },
+                  ]).map(g => (
+                    <button key={g.key} onClick={() => setGremioSel(g.key)} style={{
+                      padding: "5px 12px", borderRadius: 20, fontSize: 12, fontWeight: gremioSel === g.key ? 700 : 500,
+                      border: `1.5px solid ${gremioSel === g.key ? `rgba(${g.rgb},0.60)` : "var(--border-2)"}`,
+                      background: gremioSel === g.key ? `rgba(${g.rgb},0.12)` : "var(--surface-2)",
+                      color: gremioSel === g.key ? `rgb(${g.rgb})` : "var(--muted)",
+                      cursor: "pointer", transition: "all 0.12s",
+                    }}>{g.label}</button>
+                  ))}
+                </div>
+              </div>
+
               {/* Especialidad + búsqueda */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 <div>
@@ -708,6 +753,18 @@ export function NuevaConvocatoria() {
               </div>
             </div>
 
+            {/* Aviso filtro por sector */}
+            {sectorIdSel && (
+              <div style={{
+                padding: "7px 12px", borderRadius: 8, marginTop: 4,
+                background: "rgba(21,101,192,0.07)", border: "1px solid rgba(21,101,192,0.20)",
+                fontSize: 12, color: "var(--blue)", lineHeight: 1.4,
+              }}>
+                Mostrando solo médicos habilitados para <b>{sectorFinal}</b>.
+                Los que no tienen ese sector en su perfil no aparecen.
+              </div>
+            )}
+
             {/* Separador */}
             <div style={{ height: 1, background: "var(--border-2)", margin: "14px 0" }} />
 
@@ -742,6 +799,14 @@ export function NuevaConvocatoria() {
                       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                         <span style={{ fontWeight: 600, fontSize: 13, color: "var(--text)" }}>{m.displayName}</span>
                         <TipoBadge tipo={m.tipo} />
+                        {m.gremio && (
+                          <span style={{
+                            padding: "1px 7px", borderRadius: 20, fontSize: 10.5, fontWeight: 700,
+                            background: m.gremio === "SAQ" ? "rgba(217,119,6,0.10)" : "rgba(21,101,192,0.10)",
+                            color: m.gremio === "SAQ" ? "rgb(160,90,0)" : "rgb(21,101,192)",
+                            border: `1px solid ${m.gremio === "SAQ" ? "rgba(217,119,6,0.25)" : "rgba(21,101,192,0.22)"}`,
+                          }}>{m.gremio}</span>
+                        )}
                         {m.especialidad && (
                           <span style={{ fontSize: 11, color: "var(--subtle)", fontStyle: "italic" }}>{m.especialidad}</span>
                         )}

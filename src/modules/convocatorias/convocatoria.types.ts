@@ -13,10 +13,12 @@ export type InvitacionEstado =
   | "ACEPTO"
   | "RECHAZO"
   | "SIN_RESPUESTA"
-  | "VENCIDA";
+  | "VENCIDA"
+  | "CUBIERTA_X_OTRO"; // convocatoria masiva cubierta por otro médico
 
 export type AsignacionEstado =
   | "CONFIRMADA"
+  | "DEVOLUCION_PENDIENTE"  // médico solicitó devolver la guardia, pendiente de aprobación
   | "CANCELADA_POR_MEDICO"
   | "REEMPLAZADA"
   | "CUMPLIDA"
@@ -39,9 +41,15 @@ export type Asignacion = {
   estado: AsignacionEstado;
   createdAt: string;
 
-  closedAt?: string;          // ISO cuando se cierra
-  horas?: number;             // horas calculadas al cierre
-  cierreNota?: string;        // opcional (ej: "se retiró antes", etc.)
+  closedAt?: string;
+  horas?: number;
+  cierreNota?: string;
+
+  // Devolución de guardia
+  devolucionSolicitadaEn?: string;   // ISO
+  devolucionMotivo?: string;
+  devolucionAprobadaEn?: string;     // ISO
+  devolucionAprobadaPor?: string;    // userId del aprobador
 };
 
 export type Convocatoria = {

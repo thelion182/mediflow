@@ -1,8 +1,10 @@
 ﻿import React, { useMemo, useState } from "react";
 import { AppShell } from "../../ui/AppShell";
+import { authStore } from "../../auth/auth.store";
 import { convocatoriaStore } from "../convocatorias/convocatoria.store";
 import { medicosStore } from "../admin/medicos.store";
 import { sedesStore } from "../admin/sedes.store";
+import { guardiasFijasStore } from "../admin/guardias-fijas.store";
 
 // ── Date helpers ──────────────────────────────────────────────────────────
 function todayStr() { return new Date().toISOString().slice(0, 10); }
@@ -65,7 +67,7 @@ function BadgeAsignacion({ estado }: { estado: string }) {
 
 // ── Edit panel ────────────────────────────────────────────────────────────
 function EditPanel({
-  conv, day, medicoName, allMedicos, onClose, onRefresh,
+  conv, day, medicoName, allMedicos, onClose, onRefresh, readonly,
 }: {
   conv: any;
   day: string;
@@ -73,6 +75,7 @@ function EditPanel({
   allMedicos: any[];
   onClose: () => void;
   onRefresh: () => void;
+  readonly?: boolean;
 }) {
   const [showSelector, setShowSelector] = useState(false);
   const [search, setSearch] = useState("");
@@ -173,7 +176,7 @@ function EditPanel({
                     {a.medicoId}
                     {a.cierreNota && <span style={{ marginLeft: 6 }}>· {a.cierreNota}</span>}
                   </div>
-                  {a.estado === "CONFIRMADA" && (
+                  {a.estado === "CONFIRMADA" && !readonly && (
                     <div style={{ marginTop: 6 }}>
                       <div className="field" style={{ margin: 0 }}>
                         <input
@@ -201,7 +204,7 @@ function EditPanel({
         </div>
 
         {/* Assign new doctor */}
-        {(conv.cupos > confirmadas.length || confirmadas.length === 0) && (
+        {!readonly && (conv.cupos > confirmadas.length || confirmadas.length === 0) && (
           <div>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", color: "var(--muted)", textTransform: "uppercase", marginBottom: 8 }}>
               Asignar médico
@@ -286,6 +289,9 @@ type Zona = "todos" | "montevideo" | "interior";
 
 // ── ParteDiario ───────────────────────────────────────────────────────────
 export function ParteDiario() {
+  const session = authStore.getSession();
+  const readonly = session?.role === "MEDICO" || session?.role === "CONSULTA_PD";
+
   const [day, setDay] = useState(todayStr);
   const [tick, setTick] = useState(0);
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
@@ -304,6 +310,12 @@ export function ParteDiario() {
   const medicoName = (id: string) => medicosById.get(id) ?? id;
 
   const allConvs = useMemo(() => convocatoriaStore.list(), [tick]);
+
+  const guardiasFijasDelDia = useMemo(() => {
+    const dayStart = new Date(day + "T00:00:00");
+    const dayEnd   = new Date(day + "T23:59:59");
+    return guardiasFijasStore.getForDateRange(dayStart, dayEnd);
+  }, [day, tick]);
 
   // Mapa nombre de sede → departamento (para zona Mvd/Interior)
   const sedeDeptMap = useMemo(() => {
@@ -377,6 +389,15 @@ export function ParteDiario() {
   return (
     <AppShell>
       {/* ── Header ── */}
+      {readonly && (
+        <div style={{
+          marginBottom: 12, padding: "8px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+          background: "rgba(100,116,139,0.08)", border: "1px solid rgba(100,116,139,0.20)",
+          color: "var(--muted)",
+        }}>
+          👁 Modo solo lectura — no se pueden realizar cambios desde este rol.
+        </div>
+      )}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, letterSpacing: "-0.03em" }}>Parte Diario</h1>
@@ -644,7 +665,7 @@ export function ParteDiario() {
                               >
                                 <span style={{ fontSize: 11, fontWeight: 600, color: col.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                                   {asignados.length > 0
-                                    ? asignados.map(n => n.split(" ").slice(0, 2).join(" ")).join(", ")
+                                    ? asignados.join(", ")
                                     : c.estado === "CANCELADA" ? "Cancelada" : "Sin cobertura"}
                                 </span>
                               </div>
@@ -694,6 +715,57 @@ export function ParteDiario() {
               </div>
             ))
           )}
+
+          {/* ── Guardias Fijas del día ── */}
+          {guardiasFijasDelDia.length > 0 && (
+            <div style={{
+              background: "var(--surface)", border: "1px solid rgba(109,191,60,0.30)",
+              borderRadius: 14, overflow: "hidden", boxShadow: "var(--shadow-sm)",
+              marginTop: 16,
+            }}>
+              <div style={{
+                display: "flex", alignItems: "center", gap: 8,
+                padding: "10px 18px", borderBottom: "1px solid rgba(109,191,60,0.20)",
+                background: "rgba(109,191,60,0.05)",
+              }}>
+                <div style={{ width: 9, height: 9, borderRadius: "50%", background: "rgb(109,191,60)" }} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>
+                  Guardias Fijas · {guardiasFijasDelDia.length}
+                </span>
+                <span style={{ fontSize: 12, color: "var(--muted)" }}>proyección automática del día</span>
+              </div>
+              <div style={{ padding: "10px 18px", display: "grid", gap: 8 }}>
+                {guardiasFijasDelDia.map(g => {
+                  const m = allMedicos.find(med => med.userId === g.medicoId);
+                  return (
+                    <div key={g.id + g.inicio} style={{
+                      display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+                      padding: "8px 12px", borderRadius: 10,
+                      background: "rgba(109,191,60,0.07)", border: "1px solid rgba(109,191,60,0.20)",
+                    }}>
+                      <div style={{
+                        padding: "2px 8px", borderRadius: 6, fontSize: 11.5, fontWeight: 700,
+                        background: "rgba(109,191,60,0.15)", color: "rgb(45,122,15)", whiteSpace: "nowrap",
+                      }}>
+                        {fmtTime(g.inicio)} – {fmtTime(g.fin)}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ fontWeight: 600, fontSize: 13, color: "var(--text)" }}>
+                          {m?.displayName ?? g.medicoId}
+                        </span>
+                        {m?.especialidad && (
+                          <span style={{ fontSize: 11.5, color: "var(--muted)", marginLeft: 6 }}>{m.especialidad}</span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--muted)" }}>{g.sector}</div>
+                      {g.sede && <div style={{ fontSize: 12, color: "var(--subtle)" }}>{g.sede}</div>}
+                      {g.notas && <div style={{ fontSize: 11.5, color: "var(--muted)", fontStyle: "italic" }}>{g.notas}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── Edit panel ── */}
@@ -706,6 +778,7 @@ export function ParteDiario() {
               allMedicos={allMedicos}
               onClose={() => setSelectedConvId(null)}
               onRefresh={() => setTick(t => t + 1)}
+              readonly={readonly}
             />
           </div>
         )}

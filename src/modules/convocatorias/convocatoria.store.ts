@@ -42,7 +42,7 @@ function computeEstado(c: Convocatoria): ConvocatoriaEstado {
   const venc = new Date(c.vencimiento).getTime();
 
   const confirmadas = (c.asignaciones || []).filter(
-    a => a.estado === "CONFIRMADA" || a.estado === "CUMPLIDA"
+    a => a.estado === "CONFIRMADA" || a.estado === "CUMPLIDA" || a.estado === "DEVOLUCION_PENDIENTE"
   ).length;
 
   if (confirmadas >= c.cupos) return "CUBIERTA";
@@ -468,6 +468,18 @@ export const convocatoriaStore = {
     }
 
     c.estado = computeEstado(c);
+
+    // Aviso masivo: si la convocatoria quedó cubierta en modo MASIVO, notificar al resto
+    if (c.modoEnvio === "MASIVO" && c.estado === "CUBIERTA") {
+      for (const other of c.invitaciones) {
+        if (other.medicoId === medicoId) continue;
+        if (other.estado === "EN_ESPERA" || other.estado === "ENVIADA" || other.estado === "VISTA") {
+          other.estado = "CUBIERTA_X_OTRO";
+          other.respondedAt = nowIso();
+        }
+      }
+    }
+
     c.updatedAt = nowIso();
     storage.set(KEY, all);
   },
@@ -578,6 +590,52 @@ export const convocatoriaStore = {
     c.estado = computeEstado(c);
     c.updatedAt = nowIso();
     storage.set(KEY, all);
+  },
+
+  // ── Devolución de guardia ─────────────────────────────────────────────
+
+  solicitarDevolucion(convId: string, asigId: string, motivo: string): boolean {
+    const all = storage.get<Convocatoria[]>(KEY, []);
+    const c = all.find(x => x.id === convId);
+    if (!c) return false;
+    const a = (c.asignaciones || []).find(x => x.id === asigId);
+    if (!a || a.estado !== "CONFIRMADA") return false;
+    a.estado = "DEVOLUCION_PENDIENTE";
+    a.devolucionSolicitadaEn = nowIso();
+    a.devolucionMotivo = motivo.trim() || "Sin motivo especificado";
+    c.updatedAt = nowIso();
+    storage.set(KEY, all);
+    return true;
+  },
+
+  aprobarDevolucion(convId: string, asigId: string, aprobadorId: string): boolean {
+    const all = storage.get<Convocatoria[]>(KEY, []);
+    const c = all.find(x => x.id === convId);
+    if (!c) return false;
+    const a = (c.asignaciones || []).find(x => x.id === asigId);
+    if (!a || a.estado !== "DEVOLUCION_PENDIENTE") return false;
+    a.estado = "CANCELADA_POR_MEDICO";
+    a.devolucionAprobadaEn = nowIso();
+    a.devolucionAprobadaPor = aprobadorId;
+    a.closedAt = nowIso();
+    c.estado = computeEstado(c);
+    c.updatedAt = nowIso();
+    storage.set(KEY, all);
+    return true;
+  },
+
+  rechazarDevolucion(convId: string, asigId: string): boolean {
+    const all = storage.get<Convocatoria[]>(KEY, []);
+    const c = all.find(x => x.id === convId);
+    if (!c) return false;
+    const a = (c.asignaciones || []).find(x => x.id === asigId);
+    if (!a || a.estado !== "DEVOLUCION_PENDIENTE") return false;
+    a.estado = "CONFIRMADA";
+    delete (a as any).devolucionSolicitadaEn;
+    delete (a as any).devolucionMotivo;
+    c.updatedAt = nowIso();
+    storage.set(KEY, all);
+    return true;
   },
 
   asignarManual(convId: string, medicoId: string, nota?: string): boolean {
