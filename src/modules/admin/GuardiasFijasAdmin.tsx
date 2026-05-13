@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
-import { guardiasFijasStore, GuardiaFija } from "./guardias-fijas.store";
+import { guardiasFijasStore } from "./guardias-fijas.store";
+import type { GuardiaFija } from "./guardias-fijas.store";
 import { medicosStore } from "./medicos.store";
 import { sectoresStore } from "./sectores.store";
 import { sedesStore } from "./sedes.store";
