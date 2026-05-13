@@ -4,9 +4,10 @@ import { SedesAdmin } from "./SedesAdmin";
 import { SectoresAdmin } from "./SectoresAdmin";
 import { ScoringAdmin } from "./ScoringAdmin";
 import { GuardiasFijasAdmin } from "./GuardiasFijasAdmin";
+import { EspecialidadesAdmin } from "./EspecialidadesAdmin";
 import { AppShell } from "../../ui/AppShell";
 
-type Tab = "MEDICOS" | "SEDES" | "SECTORES" | "SCORING" | "GUARDIAS_FIJAS";
+type Tab = "MEDICOS" | "SEDES" | "SECTORES" | "SCORING" | "GUARDIAS_FIJAS" | "ESPECIALIDADES";
 
 export function AdminDashboard() {
   const [tab, setTab] = useState<Tab>("MEDICOS");
@@ -22,6 +23,7 @@ export function AdminDashboard() {
     if (tab === "SEDES") return "Catálogo de Sedes. Se usa para clasificar y filtrar convocatorias.";
     if (tab === "SECTORES") return "Catálogo de Sectores. Se usa para clasificar y filtrar convocatorias.";
     if (tab === "GUARDIAS_FIJAS") return "Médicos con turno fijo recurrente. Se proyectan automáticamente en el Parte Diario según el día de la semana.";
+    if (tab === "ESPECIALIDADES") return "Configurá el emoji que identifica cada especialidad médica. Se muestra en el Parte Diario y en los filtros de destaque.";
     return "Scores calculados automáticamente a partir del historial de convocatorias. Configurá los pesos en Configuración → Scoring.";
   }, [tab]);
 
@@ -39,7 +41,8 @@ export function AdminDashboard() {
           { key: "MEDICOS",        label: "Médicos"         },
           { key: "SEDES",          label: "Sedes"           },
           { key: "SECTORES",       label: "Sectores"        },
-          { key: "GUARDIAS_FIJAS", label: "Guardias Fijas"  },
+          { key: "GUARDIAS_FIJAS",  label: "Guardias Fijas"  },
+          { key: "ESPECIALIDADES", label: "Especialidades"  },
           { key: "SCORING",        label: "Scoring"         },
         ] as { key: Tab; label: string }[]).map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
@@ -61,8 +64,9 @@ export function AdminDashboard() {
       {tab === "MEDICOS"        ? <MedicosAdmin />        : null}
       {tab === "SEDES"          ? <SedesAdmin />          : null}
       {tab === "SECTORES"       ? <SectoresAdmin />       : null}
-      {tab === "GUARDIAS_FIJAS" ? <GuardiasFijasAdmin />  : null}
-      {tab === "SCORING"        ? <ScoringAdmin />        : null}
+      {tab === "GUARDIAS_FIJAS"  ? <GuardiasFijasAdmin />   : null}
+      {tab === "ESPECIALIDADES" ? <EspecialidadesAdmin /> : null}
+      {tab === "SCORING"        ? <ScoringAdmin />         : null}
     </AppShell>
   );
 }

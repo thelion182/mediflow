@@ -5,6 +5,7 @@ import { convocatoriaStore } from "../convocatorias/convocatoria.store";
 import { medicosStore } from "../admin/medicos.store";
 import { sedesStore } from "../admin/sedes.store";
 import { guardiasFijasStore } from "../admin/guardias-fijas.store";
+import { especialidadesStore } from "../admin/especialidades.store";
 
 // ── Date helpers ──────────────────────────────────────────────────────────
 function todayStr() { return new Date().toISOString().slice(0, 10); }
@@ -35,6 +36,15 @@ function pctOf(isoStr: string, dayStr: string): number {
   return Math.max(0, Math.min(100, ((t - s) / (e - s)) * 100));
 }
 function fmtHour(h: number) { return `${String(h).padStart(2, "0")}:00`; }
+function dChip(active: boolean, rgb: string): React.CSSProperties {
+  return {
+    padding: "4px 11px", borderRadius: 20, fontSize: 12, fontWeight: active ? 700 : 500,
+    border: `1.5px solid ${active ? `rgba(${rgb},0.60)` : "var(--border-2)"}`,
+    background: active ? `rgba(${rgb},0.12)` : "var(--surface-2)",
+    color: active ? `rgb(${rgb})` : "var(--muted)",
+    cursor: "pointer", transition: "all 0.12s",
+  };
+}
 
 // ── Status colors ─────────────────────────────────────────────────────────
 function estadoColor(estado: string) {
@@ -301,13 +311,39 @@ export function ParteDiario() {
   const [filtroSede, setFiltroSede]     = useState("");
   const [filtroSector, setFiltroSector] = useState("");
 
+  type FiltroDestaque = { tipo: "GREMIO" | "TIPO" | "ESPECIALIDAD"; valor: string };
+  const [filtroD, setFiltroD] = useState<FiltroDestaque | null>(null);
+
   const allMedicos = useMemo(() => medicosStore.list().filter((m: any) => m.activo ?? true), [tick]);
   const medicosById = useMemo(() => {
     const m = new Map<string, string>();
     for (const med of allMedicos) m.set(med.userId, med.displayName);
     return m;
   }, [tick]);
+  const medicosFullById = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const med of allMedicos) m.set(med.userId, med);
+    return m;
+  }, [tick]);
+  const iconosEsp = useMemo(() => especialidadesStore.getAll(), [tick]);
+  const espIcono  = (esp: string) => iconosEsp[esp] ?? "🏥";
   const medicoName = (id: string) => medicosById.get(id) ?? id;
+
+  function convMatchesFiltro(c: any): boolean {
+    if (!filtroD) return true;
+    const confirmados = (c.asignaciones || []).filter(
+      (a: any) => a.estado === "CONFIRMADA" || a.estado === "CUMPLIDA"
+    );
+    if (!confirmados.length) return false;
+    return confirmados.some((a: any) => {
+      const med = medicosFullById.get(a.medicoId);
+      if (!med) return false;
+      if (filtroD.tipo === "GREMIO")       return (med.gremio ?? "SMU") === filtroD.valor;
+      if (filtroD.tipo === "TIPO")         return med.tipo === filtroD.valor;
+      if (filtroD.tipo === "ESPECIALIDAD") return med.especialidad === filtroD.valor;
+      return false;
+    });
+  }
 
   const allConvs = useMemo(() => convocatoriaStore.list(), [tick]);
 
@@ -406,6 +442,19 @@ export function ParteDiario() {
 
   const hasCoverage = Object.keys(grouped).length > 0;
   const hourMarks = Array.from({ length: 13 }, (_, i) => i * 2);
+
+  const especialidadesHoy = useMemo(() => {
+    const set = new Set<string>();
+    Object.values(grouped).flatMap(s => Object.values(s).flat()).forEach((c: any) => {
+      (c.asignaciones || [])
+        .filter((a: any) => a.estado === "CONFIRMADA" || a.estado === "CUMPLIDA")
+        .forEach((a: any) => {
+          const m = medicosFullById.get(a.medicoId);
+          if (m?.especialidad) set.add(m.especialidad);
+        });
+    });
+    return Array.from(set).sort();
+  }, [grouped, medicosFullById]);
 
   return (
     <AppShell>
@@ -522,6 +571,66 @@ export function ParteDiario() {
               color: "var(--muted)", cursor: "pointer",
             }}
           >✕ Limpiar filtros</button>
+        )}
+      </div>
+
+      {/* ── Filtro de destaque ── */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap",
+        padding: "8px 14px", borderRadius: 12,
+        background: "var(--surface)", border: "1px solid var(--border)",
+        boxShadow: "var(--shadow-sm)",
+      }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", flexShrink: 0 }}>
+          Destacar:
+        </span>
+        {[
+          { label: "Todos", active: !filtroD, onClick: () => setFiltroD(null), rgb: "100,116,139" },
+        ].map(b => (
+          <button key="todos" onClick={b.onClick} style={dChip(b.active, b.rgb)}>{b.label}</button>
+        ))}
+
+        <div style={{ width: 1, height: 18, background: "var(--border-2)", flexShrink: 0 }} />
+
+        {/* Gremio */}
+        {[
+          { label: "SAQ", valor: "SAQ", rgb: "217,119,6" },
+          { label: "SMU", valor: "SMU", rgb: "21,101,192" },
+        ].map(b => (
+          <button key={b.label}
+            onClick={() => setFiltroD(filtroD?.tipo === "GREMIO" && filtroD.valor === b.valor ? null : { tipo: "GREMIO", valor: b.valor })}
+            style={dChip(filtroD?.tipo === "GREMIO" && filtroD.valor === b.valor, b.rgb)}
+          >{b.label}</button>
+        ))}
+
+        <div style={{ width: 1, height: 18, background: "var(--border-2)", flexShrink: 0 }} />
+
+        {/* Tipo médico */}
+        {[
+          { label: "Titulares",     valor: "TITULAR",       rgb: "38,166,154"  },
+          { label: "Suplentes",     valor: "SUPLENTE",      rgb: "100,116,139" },
+          { label: "Independientes",valor: "INDEPENDIENTE", rgb: "139,92,246"  },
+        ].map(b => (
+          <button key={b.valor}
+            onClick={() => setFiltroD(filtroD?.tipo === "TIPO" && filtroD.valor === b.valor ? null : { tipo: "TIPO", valor: b.valor })}
+            style={dChip(filtroD?.tipo === "TIPO" && filtroD.valor === b.valor, b.rgb)}
+          >{b.label}</button>
+        ))}
+
+        {/* Especialidades del día */}
+        {especialidadesHoy.length > 0 && (
+          <>
+            <div style={{ width: 1, height: 18, background: "var(--border-2)", flexShrink: 0 }} />
+            {especialidadesHoy.map(esp => (
+              <button key={esp}
+                onClick={() => setFiltroD(filtroD?.tipo === "ESPECIALIDAD" && filtroD.valor === esp ? null : { tipo: "ESPECIALIDAD", valor: esp })}
+                style={dChip(filtroD?.tipo === "ESPECIALIDAD" && filtroD.valor === esp, "21,101,192")}
+                title={esp}
+              >
+                {espIcono(esp)} {esp.length > 10 ? esp.slice(0, 9) + "…" : esp}
+              </button>
+            ))}
+          </>
         )}
       </div>
 
@@ -656,17 +765,18 @@ export function ParteDiario() {
                             const right = pctOf(c.fin, day);
                             const width = Math.max(0.5, right - left);
                             const col   = estadoColor(c.estado);
-                            const asignados = (c.asignaciones || [])
+                            const asignadosFull = (c.asignaciones || [])
                               .filter((a: any) => a.estado === "CONFIRMADA" || a.estado === "CUMPLIDA")
-                              .map((a: any) => medicoName(a.medicoId));
+                              .map((a: any) => ({ name: medicoName(a.medicoId), med: medicosFullById.get(a.medicoId) }));
                             const isSelected = c.id === selectedConvId;
+                            const isMatch    = convMatchesFiltro(c);
 
                             return (
                               <div
                                 key={c.id}
                                 title={c._esGuardiaFija
-                                  ? `GUARDIA FIJA · ${c.sector}\n${fmtTime(c.inicio)} → ${fmtTime(c.fin)}\n${asignados.join(", ")}`
-                                  : `${c.sector} · ${c.estado}\n${fmtTime(c.inicio)} → ${fmtTime(c.fin)}\n${asignados.length ? "Médicos: " + asignados.join(", ") : "Sin asignación · clic para gestionar"}`}
+                                  ? `GUARDIA FIJA · ${c.sector}\n${fmtTime(c.inicio)} → ${fmtTime(c.fin)}\n${asignadosFull.map(x => x.name).join(", ")}`
+                                  : `${c.sector} · ${c.estado}\n${fmtTime(c.inicio)} → ${fmtTime(c.fin)}\n${asignadosFull.length ? "Médicos: " + asignadosFull.map(x => x.name).join(", ") : "Sin asignación · clic para gestionar"}`}
                                 onClick={() => { if (!c._esGuardiaFija) setSelectedConvId(c.id === selectedConvId ? null : c.id); }}
                                 style={{
                                   position: "absolute",
@@ -683,14 +793,22 @@ export function ParteDiario() {
                                   overflow: "hidden",
                                   cursor: c._esGuardiaFija ? "default" : "pointer",
                                   boxShadow: isSelected ? `0 0 0 3px rgba(${col.rgb},0.20)` : undefined,
-                                  transition: "all 0.15s",
+                                  opacity: filtroD && !isMatch ? 0.15 : 1,
+                                  filter: filtroD && !isMatch ? "grayscale(0.7)" : "none",
+                                  transition: "opacity 0.22s, filter 0.22s, border 0.15s, box-shadow 0.15s",
                                 }}
                               >
                                 <span style={{ fontSize: 11, fontWeight: 600, color: col.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>
-                                  {asignados.length > 0
-                                    ? asignados.join(", ")
+                                  {asignadosFull.length > 0
+                                    ? asignadosFull.map(x => x.name).join(", ")
                                     : c.estado === "CANCELADA" ? "Cancelada" : "Sin cobertura"}
                                 </span>
+                                {asignadosFull.length === 1 && asignadosFull[0].med?.especialidad && (
+                                  <span style={{ fontSize: 13, flexShrink: 0, opacity: 0.85 }}
+                                    title={asignadosFull[0].med.especialidad}>
+                                    {espIcono(asignadosFull[0].med.especialidad)}
+                                  </span>
+                                )}
                                 {c._esGuardiaFija && (
                                   <span style={{
                                     fontSize: 9, fontWeight: 800, padding: "1px 4px",
@@ -709,8 +827,9 @@ export function ParteDiario() {
                             const asignados = (c.asignaciones || []).filter(
                               (a: any) => a.estado === "CONFIRMADA" || a.estado === "CUMPLIDA"
                             );
-                            const col = estadoColor(c.estado);
+                            const col      = estadoColor(c.estado);
                             const isSelected = c.id === selectedConvId;
+                            const isMatch    = convMatchesFiltro(c);
                             return (
                               <div
                                 key={c.id}
@@ -720,7 +839,8 @@ export function ParteDiario() {
                                   cursor: c._esGuardiaFija ? "default" : "pointer",
                                   padding: "3px 6px", borderRadius: 6,
                                   background: isSelected ? `rgba(${col.rgb},0.08)` : "transparent",
-                                  transition: "background 0.12s",
+                                  opacity: filtroD && !isMatch ? 0.20 : 1,
+                                  transition: "background 0.12s, opacity 0.22s",
                                 }}
                               >
                                 <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -736,11 +856,19 @@ export function ParteDiario() {
                                   )}
                                 </div>
                                 {asignados.length > 0 ? (
-                                  asignados.map((a: any) => (
-                                    <div key={a.id} style={{ color: "var(--text)", marginTop: 1 }}>
-                                      {medicoName(a.medicoId)}
-                                    </div>
-                                  ))
+                                  asignados.map((a: any) => {
+                                    const med = medicosFullById.get(a.medicoId);
+                                    return (
+                                      <div key={a.id} style={{ marginTop: 1 }}>
+                                        <span style={{ color: "var(--text)" }}>{medicoName(a.medicoId)}</span>
+                                        {med?.especialidad && (
+                                          <span style={{ fontSize: 10, color: "var(--muted)", marginLeft: 4 }}>
+                                            {espIcono(med.especialidad)} {med.especialidad.slice(0, 11)}{med.especialidad.length > 11 ? "…" : ""}
+                                          </span>
+                                        )}
+                                      </div>
+                                    );
+                                  })
                                 ) : (
                                   <div style={{ color: "var(--muted)", fontStyle: "italic" }}>Sin cubrir ✎</div>
                                 )}
