@@ -1,28 +1,29 @@
 import { storage } from "../../core/storage";
 
-const KEY = "mediflow.especialidades.v1";
+const KEY = "mediflow.especialidades.v2";
 
 const DEFAULTS: Record<string, string> = {
-  "Cardiología":          "❤️",
-  "Pediatría":            "👶",
-  "Medicina General":     "🩺",
-  "Emergentología":       "🚑",
-  "Ginecología":          "🌸",
-  "Traumatología":        "🦴",
-  "Neurología":           "🧠",
-  "Gastroenterología":    "🔬",
-  "Dermatología":         "🧴",
-  "Psiquiatría":          "🧘",
-  "Oncología":            "🎗️",
-  "Endocrinología":       "⚗️",
   "Anestesiología":       "💉",
-  "Oftalmología":         "👁️",
-  "Otorrinolaringología": "👂",
-  "Urología":             "💊",
+  "Cardiología":          "❤️",
   "Cirugía":              "🔪",
+  "Dermatología":         "🧴",
+  "Emergentología":       "🚑",
+  "Endocrinología":       "⚗️",
+  "Gastroenterología":    "🔬",
+  "Ginecología":          "🌸",
+  "Medicina General":     "🩺",
   "Medicina Interna":     "🏥",
+  "Nefrología":           "🫘",
+  "Neumología":           "🫁",
+  "Neurología":           "🧠",
+  "Oftalmología":         "👁️",
+  "Oncología":            "🎗️",
+  "Otorrinolaringología": "👂",
+  "Pediatría":            "👶",
+  "Psiquiatría":          "🧘",
   "Reumatología":         "🦿",
-  "Nefrología":           "🫁",
+  "Traumatología":        "🦴",
+  "Urología":             "💊",
 };
 
 export const especialidadesStore = {
@@ -45,5 +46,12 @@ export const especialidadesStore = {
   remove(nombre: string) {
     const { [nombre]: _removed, ...rest } = this.getAll();
     storage.set(KEY, rest);
+  },
+  rename(oldNombre: string, newNombre: string) {
+    if (oldNombre === newNombre) return;
+    const all = this.getAll();
+    const icono = all[oldNombre] ?? "🏥";
+    const { [oldNombre]: _removed, ...rest } = all;
+    storage.set(KEY, { ...rest, [newNombre]: icono });
   },
 };

@@ -4,7 +4,8 @@ import { especialidadesStore } from "./especialidades.store";
 const EMOJI_GRID = [
   "🩺","❤️","🫀","🧠","🦴","👶","🌸","🔬","💊","🩹",
   "🚑","🩻","💉","🧬","🫁","👁️","👂","🦷","🧴","🎗️",
-  "⚗️","🧘","🏥","🫂","🔪","🦿","⚕️","🩺","🩸","🌡️",
+  "⚗️","🧘","🏥","🫂","🔪","🦿","⚕️","🩸","🌡️","🫘",
+  "🧪","🔭","🩼","🦻","🦶","🫶","💆","🧬","🩱","🌿",
 ];
 
 const inp: React.CSSProperties = {
@@ -14,21 +15,28 @@ const inp: React.CSSProperties = {
 };
 
 export function EspecialidadesAdmin() {
-  const [tick,    setTick]    = useState(0);
-  const [editing, setEditing] = useState<string | null>(null);
-  const [input,   setInput]   = useState("");
-  const [newEsp,  setNewEsp]  = useState("");
+  const [tick,      setTick]      = useState(0);
+  const [editing,   setEditing]   = useState<string | null>(null);
+  const [inputName, setInputName] = useState("");
+  const [inputIcon, setInputIcon] = useState("");
+  const [newEsp,    setNewEsp]    = useState("");
 
-  const iconos        = useMemo(() => especialidadesStore.getAll(), [tick]);
+  const iconos         = useMemo(() => especialidadesStore.getAll(), [tick]);
   const especialidades = useMemo(() => especialidadesStore.listNames(), [tick]);
 
   function startEdit(esp: string) {
     setEditing(esp);
-    setInput(iconos[esp] ?? "🏥");
+    setInputName(esp);
+    setInputIcon(iconos[esp] ?? "🏥");
   }
 
   function save(esp: string) {
-    if (input.trim()) especialidadesStore.setIcono(esp, input.trim());
+    const newName = inputName.trim() || esp;
+    const newIcon = inputIcon.trim();
+    if (newName !== esp) {
+      especialidadesStore.rename(esp, newName);
+    }
+    if (newIcon) especialidadesStore.setIcono(newName, newIcon);
     setEditing(null);
     setTick(t => t + 1);
   }
@@ -108,26 +116,49 @@ export function EspecialidadesAdmin() {
               </span>
 
               {isOpen ? (
-                <div style={{ display: "grid", gap: 10, flex: "1 1 300px" }}>
-                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                    {EMOJI_GRID.map((e, i) => (
-                      <button key={i} onClick={() => setInput(e)} style={{
-                        fontSize: 20, padding: "3px 5px", borderRadius: 7, cursor: "pointer",
-                        border: input === e ? "2px solid var(--blue)" : "1.5px solid var(--border-2)",
-                        background: input === e ? "rgba(21,101,192,0.10)" : "var(--surface)",
-                        transition: "all 0.10s",
-                      }}>{e}</button>
-                    ))}
+                <div style={{ display: "grid", gap: 12, flex: "1 1 300px", width: "100%" }}>
+
+                  {/* Nombre */}
+                  <div>
+                    <label style={{
+                      display: "block", fontSize: 11, fontWeight: 700, color: "var(--muted)",
+                      marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.04em",
+                    }}>Nombre de la especialidad</label>
+                    <input
+                      value={inputName}
+                      onChange={e => setInputName(e.target.value)}
+                      style={inp}
+                      autoFocus
+                    />
                   </div>
 
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  {/* Emoji grid */}
+                  <div>
+                    <label style={{
+                      display: "block", fontSize: 11, fontWeight: 700, color: "var(--muted)",
+                      marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em",
+                    }}>Ícono</label>
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                      {EMOJI_GRID.map((e, i) => (
+                        <button key={i} onClick={() => setInputIcon(e)} style={{
+                          fontSize: 20, padding: "3px 5px", borderRadius: 7, cursor: "pointer",
+                          border: inputIcon === e ? "2px solid var(--blue)" : "1.5px solid var(--border-2)",
+                          background: inputIcon === e ? "rgba(21,101,192,0.10)" : "var(--surface)",
+                          transition: "all 0.10s",
+                        }}>{e}</button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Custom emoji + preview + actions */}
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                     <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>
                       O escribí / pegá:
                     </span>
                     <input
-                      value={input}
-                      onChange={e => setInput(e.target.value)}
-                      placeholder="🩺"
+                      value={inputIcon}
+                      onChange={e => setInputIcon(e.target.value)}
+                      placeholder="🏥"
                       maxLength={6}
                       style={{
                         width: 58, textAlign: "center", fontSize: 22,
@@ -137,7 +168,7 @@ export function EspecialidadesAdmin() {
                         boxSizing: "border-box",
                       }}
                     />
-                    <span style={{ fontSize: 26 }}>{input || "?"}</span>
+                    <span style={{ fontSize: 26 }}>{inputIcon || "?"}</span>
                     <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
                       <button onClick={() => save(esp)} style={{
                         padding: "6px 16px", borderRadius: 8, border: "none",
@@ -158,7 +189,7 @@ export function EspecialidadesAdmin() {
                     padding: "5px 13px", borderRadius: 8, fontSize: 12,
                     border: "1px solid var(--border)", background: "var(--surface)",
                     color: "var(--muted)", cursor: "pointer",
-                  }}>✏ Cambiar ícono</button>
+                  }}>✏ Editar</button>
                   <button onClick={() => removeEsp(esp)} style={{
                     padding: "5px 10px", borderRadius: 8, fontSize: 12,
                     border: "1px solid rgba(220,38,38,0.25)",
