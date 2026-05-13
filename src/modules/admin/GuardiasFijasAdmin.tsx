@@ -4,6 +4,7 @@ import type { GuardiaFija, PatronDias, Turno } from "./guardias-fijas.store";
 import { medicosStore } from "./medicos.store";
 import { sedesStore } from "./sedes.store";
 import { sectoresStore } from "./sectores.store";
+import { especialidadesStore } from "./especialidades.store";
 import { DoctorAvatar } from "./DoctorAvatar";
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -261,6 +262,7 @@ const DEF = {
   medicoId: "", sector: "", sede: "", notas: "", vigDesde: "", vigHasta: "",
   tipo: "DIAS_SEMANA" as PatronTipo, dias: [1,2,3,4,5] as number[],
   nthN: 1, nthDia: 5, horaInicio: "08:00", horaFin: "20:00",
+  crEsp: "",
 };
 
 export function GuardiasFijasAdmin() {
@@ -275,15 +277,21 @@ export function GuardiasFijasAdmin() {
   const [ed, setEd]         = useState({ ...DEF, activo: true });
   const [csvRows, setCsvRows] = useState<CsvRow[]>([]);
 
-  const guardias = useMemo(() => guardiasFijasStore.list(), [tick]);
-  const medicos  = useMemo(() => medicosStore.list().filter(m => m.activo), [tick]);
-  const sectores = useMemo(() => sectoresStore.list().filter((s: any) => s.activo ?? true), [tick]);
-  const sedes    = useMemo(() => sedesStore.list().filter((s: any) => s.activo ?? true), [tick]);
-  const medMap   = useMemo(() => {
+  const guardias       = useMemo(() => guardiasFijasStore.list(), [tick]);
+  const medicos        = useMemo(() => medicosStore.list().filter(m => m.activo), [tick]);
+  const sectores       = useMemo(() => sectoresStore.list().filter((s: any) => s.activo ?? true), [tick]);
+  const sedes          = useMemo(() => sedesStore.list().filter((s: any) => s.activo ?? true), [tick]);
+  const especialidades = useMemo(() => especialidadesStore.listNames(), [tick]);
+  const iconosEsp      = useMemo(() => especialidadesStore.getAll(), [tick]);
+  const medMap         = useMemo(() => {
     const m = new Map<string, (typeof medicos)[0]>();
     for (const x of medicos) m.set(x.userId, x);
     return m;
   }, [medicos]);
+
+  const medicosFiltrados = useMemo(() =>
+    cr.crEsp ? medicos.filter(m => m.especialidad === cr.crEsp) : medicos,
+  [medicos, cr.crEsp]);
 
   const visible = useMemo(() =>
     filtro === "TODOS" ? guardias : guardias.filter(g =>
@@ -409,13 +417,44 @@ export function GuardiasFijasAdmin() {
         }}>
           <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Nueva guardia fija</h3>
 
-          {/* Context: médico + lugar */}
+          {/* Context: especialidad → médico → lugar */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+
+            {/* 1. Especialidad (filtra médicos) */}
             <div style={{ gridColumn: "1 / -1" }}>
-              <label style={lbl}>Médico *</label>
-              <select style={sel} value={cr.medicoId} onChange={e => setCr(f => ({ ...f, medicoId: e.target.value }))}>
+              <label style={lbl}>Especialidad</label>
+              <select style={sel} value={cr.crEsp}
+                onChange={e => setCr(f => ({ ...f, crEsp: e.target.value, medicoId: "" }))}>
+                <option value="">Todas las especialidades</option>
+                {especialidades.map(e => (
+                  <option key={e} value={e}>{iconosEsp[e] ?? "🏥"} {e}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* 2. Médico (filtrado por especialidad) */}
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={lbl}>
+                Médico *
+                {cr.crEsp && medicosFiltrados.length === 0 && (
+                  <span style={{ color: "rgb(220,38,38)", fontWeight: 400, marginLeft: 8, textTransform: "none" }}>
+                    — No hay médicos con esa especialidad
+                  </span>
+                )}
+                {cr.crEsp && medicosFiltrados.length > 0 && (
+                  <span style={{ color: "var(--muted)", fontWeight: 400, marginLeft: 8, textTransform: "none" }}>
+                    {medicosFiltrados.length} disponible{medicosFiltrados.length !== 1 ? "s" : ""}
+                  </span>
+                )}
+              </label>
+              <select style={sel} value={cr.medicoId}
+                onChange={e => setCr(f => ({ ...f, medicoId: e.target.value }))}>
                 <option value="">— Seleccioná —</option>
-                {medicos.map(m => <option key={m.userId} value={m.userId}>{m.displayName}</option>)}
+                {medicosFiltrados.map(m => (
+                  <option key={m.userId} value={m.userId}>
+                    {m.displayName}{m.especialidad && m.especialidad !== cr.crEsp ? ` (${m.especialidad})` : ""}
+                  </option>
+                ))}
               </select>
             </div>
             <div>

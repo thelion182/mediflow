@@ -23,7 +23,7 @@ export function AdminDashboard() {
     if (tab === "SEDES") return "Catálogo de Sedes. Se usa para clasificar y filtrar convocatorias.";
     if (tab === "SECTORES") return "Catálogo de Sectores. Se usa para clasificar y filtrar convocatorias.";
     if (tab === "GUARDIAS_FIJAS") return "Médicos con turno fijo recurrente. Se proyectan automáticamente en el Parte Diario según el día de la semana.";
-    if (tab === "ESPECIALIDADES") return "Configurá el emoji que identifica cada especialidad médica. Se muestra en el Parte Diario y en los filtros de destaque.";
+    if (tab === "ESPECIALIDADES") return "Catálogo de especialidades médicas. Administrá la lista y el emoji de cada una. Se usa como desplegable al crear médicos y al crear guardias fijas.";
     return "Scores calculados automáticamente a partir del historial de convocatorias. Configurá los pesos en Configuración → Scoring.";
   }, [tab]);
 

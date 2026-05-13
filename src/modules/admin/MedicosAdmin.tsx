@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { parseCsv } from "../../core/csv";
 import { medicosStore } from "./medicos.store";
 import { sectoresStore } from "./sectores.store";
+import { especialidadesStore } from "./especialidades.store";
 import type { Medico, MedicoTipo, MedicoGremio, NivelTecnico, NivelPostgrado, NivelRelacionamiento, NivelQuejas } from "./medicos.types";
 import { DoctorAvatar } from "./DoctorAvatar";
 
@@ -51,7 +52,9 @@ export function MedicosAdmin() {
     activo: true,
   });
 
-  const sectores = useMemo(() => sectoresStore.list().filter(s => s.activo ?? true), [tick]);
+  const sectores       = useMemo(() => sectoresStore.list().filter(s => s.activo ?? true), [tick]);
+  const especialidades = useMemo(() => especialidadesStore.listNames(), [tick]);
+  const iconosEsp      = useMemo(() => especialidadesStore.getAll(), [tick]);
 
   const [csvText, setCsvText] = useState("");
 
@@ -263,11 +266,16 @@ export function MedicosAdmin() {
 
         <div className="field">
           <label className="label">Especialidad (opcional)</label>
-          <input
-            className="input"
-            value={form.especialidad as any}
-            onChange={e => setForm(f => ({ ...f, especialidad: e.target.value }))}
-          />
+          <select
+            className="select"
+            value={form.especialidad ?? ""}
+            onChange={e => setForm(f => ({ ...f, especialidad: e.target.value || undefined }))}
+          >
+            <option value="">— Sin especialidad —</option>
+            {especialidades.map(e => (
+              <option key={e} value={e}>{iconosEsp[e] ?? "🏥"} {e}</option>
+            ))}
+          </select>
         </div>
 
         <div className="field">
