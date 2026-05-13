@@ -56,9 +56,47 @@ export function MedicosAdmin() {
   const especialidades = useMemo(() => especialidadesStore.listNames(), [tick]);
   const iconosEsp      = useMemo(() => especialidadesStore.getAll(), [tick]);
 
-  const [csvText, setCsvText] = useState("");
+  const [csvText,     setCsvText]     = useState("");
+  const [busqueda,    setBusqueda]    = useState("");
+  const [filtroTipo,  setFiltroTipo]  = useState<"" | MedicoTipo>("");
+  const [filtroGremio,setFiltroGremio]= useState<"" | MedicoGremio>("");
+  const [filtroActivo,setFiltroActivo]= useState<"" | "true" | "false">("");
+  const [filtroEsp,   setFiltroEsp]   = useState("");
+  const [pagina,      setPagina]      = useState(0);
+  const POR_PAGINA = 50;
 
   const list = useMemo(() => medicosStore.list(), [tick]);
+
+  function norm(s?: string) {
+    return (s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  }
+
+  const listFiltrada = useMemo(() => {
+    const q = norm(busqueda.trim());
+    return list.filter(m => {
+      if (filtroTipo   && m.tipo   !== filtroTipo)   return false;
+      if (filtroGremio && m.gremio !== filtroGremio) return false;
+      if (filtroActivo !== "" && String(m.activo ?? true) !== filtroActivo) return false;
+      if (filtroEsp    && m.especialidad !== filtroEsp) return false;
+      if (!q) return true;
+      return norm(m.displayName).includes(q)
+          || norm(m.userId).includes(q)
+          || norm(m.cedula).includes(q)
+          || norm(m.funcionario).includes(q)
+          || norm(m.especialidad).includes(q)
+          || norm(m.telefono).includes(q);
+    });
+  }, [list, busqueda, filtroTipo, filtroGremio, filtroActivo, filtroEsp]);
+
+  const listPaginada = useMemo(
+    () => listFiltrada.slice(0, (pagina + 1) * POR_PAGINA),
+    [listFiltrada, pagina],
+  );
+
+  function resetFiltros() {
+    setBusqueda(""); setFiltroTipo(""); setFiltroGremio(""); setFiltroActivo(""); setFiltroEsp(""); setPagina(0);
+  }
+  const hayFiltros = !!(busqueda || filtroTipo || filtroGremio || filtroActivo || filtroEsp);
 
   function refresh() {
     setTick(t => t + 1);
@@ -413,46 +451,137 @@ export function MedicosAdmin() {
         </div>
       </div>
 
-      <div className="panel">
-        <h3 style={{ margin: 0, fontSize: 14 }}>Médicos</h3>
-        <p className="sub">Click en “Editar” para cargar el formulario arriba.</p>
+      <div className=”panel”>
+        <div style={{ display: “flex”, alignItems: “baseline”, gap: 10, marginBottom: 12, flexWrap: “wrap” }}>
+          <h3 style={{ margin: 0, fontSize: 14 }}>Médicos</h3>
+          <span style={{ fontSize: 12, color: “var(--muted)” }}>
+            {listFiltrada.length === list.length
+              ? `${list.length} en total`
+              : `${listFiltrada.length} de ${list.length}`}
+          </span>
+          {hayFiltros && (
+            <button onClick={resetFiltros} style={{
+              padding: “2px 10px”, borderRadius: 20, fontSize: 11, cursor: “pointer”,
+              border: “1px solid rgba(220,38,38,0.30)”, background: “rgba(220,38,38,0.06)”,
+              color: “rgb(220,38,38)”,
+            }}>✕ Limpiar filtros</button>
+          )}
+        </div>
 
-        <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
-          {list.map(m => (
-            <div key={m.userId} className="btnGhost" style={{ padding: 12, textAlign: "left" }}>
-              <div className="row" style={{ gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+        {/* Búsqueda */}
+        <input
+          className=”input”
+          placeholder=”Buscar por nombre, CI, funcionario, especialidad, teléfono…”
+          value={busqueda}
+          onChange={e => { setBusqueda(e.target.value); setPagina(0); }}
+          style={{ marginBottom: 10 }}
+        />
+
+        {/* Chips de filtro */}
+        <div style={{ display: “flex”, gap: 6, flexWrap: “wrap”, marginBottom: 14 }}>
+          {/* Tipo */}
+          {([“TITULAR”,”SUPLENTE”,”INDEPENDIENTE”] as MedicoTipo[]).map(t => (
+            <button key={t} onClick={() => { setFiltroTipo(filtroTipo === t ? “” : t); setPagina(0); }} style={{
+              padding: “4px 11px”, borderRadius: 20, fontSize: 11.5, cursor: “pointer”,
+              fontWeight: filtroTipo === t ? 700 : 400,
+              border: `1.5px solid ${filtroTipo === t ? “rgba(21,101,192,0.55)” : “var(--border-2)”}`,
+              background: filtroTipo === t ? “rgba(21,101,192,0.10)” : “var(--surface-2)”,
+              color: filtroTipo === t ? “var(--blue)” : “var(--muted)”,
+            }}>{t[0] + t.slice(1).toLowerCase()}</button>
+          ))}
+          <span style={{ width: 1, background: “var(--border-2)”, margin: “0 2px” }} />
+          {/* Gremio */}
+          {([“SAQ”,”SMU”] as MedicoGremio[]).map(g => (
+            <button key={g} onClick={() => { setFiltroGremio(filtroGremio === g ? “” : g); setPagina(0); }} style={{
+              padding: “4px 11px”, borderRadius: 20, fontSize: 11.5, cursor: “pointer”,
+              fontWeight: filtroGremio === g ? 700 : 400,
+              border: `1.5px solid ${filtroGremio === g ? “rgba(38,166,154,0.55)” : “var(--border-2)”}`,
+              background: filtroGremio === g ? “rgba(38,166,154,0.10)” : “var(--surface-2)”,
+              color: filtroGremio === g ? “var(--teal-dark)” : “var(--muted)”,
+            }}>{g}</button>
+          ))}
+          <span style={{ width: 1, background: “var(--border-2)”, margin: “0 2px” }} />
+          {/* Activo */}
+          {([[“true”,”Activos”],[“false”,”Inactivos”]] as [string,string][]).map(([v,l]) => (
+            <button key={v} onClick={() => { setFiltroActivo(filtroActivo === v ? “” : v as any); setPagina(0); }} style={{
+              padding: “4px 11px”, borderRadius: 20, fontSize: 11.5, cursor: “pointer”,
+              fontWeight: filtroActivo === v ? 700 : 400,
+              border: `1.5px solid ${filtroActivo === v ? “rgba(22,163,74,0.55)” : “var(--border-2)”}`,
+              background: filtroActivo === v ? “rgba(22,163,74,0.10)” : “var(--surface-2)”,
+              color: filtroActivo === v ? “rgb(22,163,74)” : “var(--muted)”,
+            }}>{l}</button>
+          ))}
+          <span style={{ width: 1, background: “var(--border-2)”, margin: “0 2px” }} />
+          {/* Especialidad */}
+          <select
+            value={filtroEsp}
+            onChange={e => { setFiltroEsp(e.target.value); setPagina(0); }}
+            style={{
+              padding: “4px 10px”, borderRadius: 20, fontSize: 11.5, cursor: “pointer”,
+              border: `1.5px solid ${filtroEsp ? “rgba(21,101,192,0.55)” : “var(--border-2)”}`,
+              background: filtroEsp ? “rgba(21,101,192,0.08)” : “var(--surface-2)”,
+              color: filtroEsp ? “var(--blue)” : “var(--muted)”,
+              fontWeight: filtroEsp ? 700 : 400,
+            }}
+          >
+            <option value=””>Todas las especialidades</option>
+            {especialidades.map(e => <option key={e} value={e}>{iconosEsp[e] ?? “🏥”} {e}</option>)}
+          </select>
+        </div>
+
+        {/* Lista */}
+        <div style={{ display: “grid”, gap: 8 }}>
+          {listPaginada.length === 0 && (
+            <p style={{ color: “var(--subtle)”, fontSize: 13, padding: “20px 0”, textAlign: “center” }}>
+              Sin resultados para los filtros aplicados.
+            </p>
+          )}
+          {listPaginada.map(m => (
+            <div key={m.userId} className=”btnGhost” style={{ padding: 12, textAlign: “left” }}>
+              <div className=”row” style={{ gap: 10, flexWrap: “wrap”, alignItems: “center” }}>
                 <DoctorAvatar medico={m} size={36} />
                 <b>{m.displayName}</b>
-                <span className="pill">{m.userId}</span>
-                <span className="pill">{String(m.tipo ?? "SUPLENTE")}</span>
-                <span className="pill" style={{ background: m.gremio === "SAQ" ? "rgba(21,101,192,0.10)" : "rgba(38,166,154,0.10)", color: m.gremio === "SAQ" ? "var(--blue)" : "var(--teal-dark)" }}>{m.gremio ?? "SMU"}</span>
-                <span className="pill">Prio: {prioLabel(m.prioridad)}</span>
-                <span className="pill">{(m.activo ?? true) ? "ACTIVO" : "INACTIVO"}</span>
+                <span className=”pill”>{m.userId}</span>
+                <span className=”pill”>{String(m.tipo ?? “SUPLENTE”)}</span>
+                <span className=”pill” style={{ background: m.gremio === “SAQ” ? “rgba(21,101,192,0.10)” : “rgba(38,166,154,0.10)”, color: m.gremio === “SAQ” ? “var(--blue)” : “var(--teal-dark)” }}>{m.gremio ?? “SMU”}</span>
+                <span className=”pill”>Prio: {prioLabel(m.prioridad)}</span>
+                <span className=”pill”>{(m.activo ?? true) ? “ACTIVO” : “INACTIVO”}</span>
               </div>
 
-              <div className="sub" style={{ marginTop: 6 }}>
-                {m.especialidad ? `${m.especialidad} · ` : ""}
-                {m.funcionario ? `Func: ${m.funcionario} · ` : ""}
-                {m.cedula ? `CI: ${m.cedula}` : ""}
+              <div className=”sub” style={{ marginTop: 6 }}>
+                {m.especialidad ? `${iconosEsp[m.especialidad] ?? “🏥”} ${m.especialidad} · ` : “”}
+                {m.funcionario ? `Func: ${m.funcionario} · ` : “”}
+                {m.cedula ? `CI: ${m.cedula}` : “”}
                 {(m.sectoresHabilitados ?? []).length > 0 && (
-                  <span style={{ display: "block", marginTop: 3, fontSize: 11, color: "var(--subtle)" }}>
-                    Sectores: {(m.sectoresHabilitados ?? []).join(", ")}
+                  <span style={{ display: “block”, marginTop: 3, fontSize: 11, color: “var(--subtle)” }}>
+                    Sectores: {(m.sectoresHabilitados ?? []).join(“, “)}
                   </span>
                 )}
               </div>
 
-              <div className="row" style={{ marginTop: 10, gap: 10 }}>
-                <button className="btnGhost" onClick={() => onEdit(m)}>Editar</button>
+              <div className=”row” style={{ marginTop: 10, gap: 10 }}>
+                <button className=”btnGhost” onClick={() => onEdit(m)}>Editar</button>
                 <button
-                  className="btnGhost"
+                  className=”btnGhost”
                   onClick={() => onDelete(m.userId)}
-                  style={{ borderColor: "rgba(239,68,68,.25)" }}
+                  style={{ borderColor: “rgba(239,68,68,.25)” }}
                 >
                   Eliminar
                 </button>
               </div>
             </div>
           ))}
+
+          {/* Paginación */}
+          {listPaginada.length < listFiltrada.length && (
+            <button
+              onClick={() => setPagina(p => p + 1)}
+              className="btnGhost"
+              style={{ textAlign: "center", color: "var(--blue)", fontWeight: 600 }}
+            >
+              Cargar más ({listFiltrada.length - listPaginada.length} restantes)
+            </button>
+          )}
         </div>
       </div>
     </div>
