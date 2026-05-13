@@ -16,7 +16,7 @@ type NavItem = {
 
 const NAV: Record<Role, NavItem[]> = {
   SUPER_ADMIN: [
-    { label: "Dashboard",         path: "/dashboard",                  rgb: "21,101,192",  exact: true },
+    { label: "Inicio",         path: "/dashboard",                  rgb: "21,101,192",  exact: true },
     { label: "Parte Diario",      path: "/parte-diario",               rgb: "109,191,60"                },
     { label: "Nueva Convocatoria",path: "/dashboard/nueva",            rgb: "21,101,192",  dividerBefore: true },
     { label: "Reportes",          path: "/dashboard/reportes/horas",   rgb: "217,119,6"                 },
@@ -24,13 +24,13 @@ const NAV: Record<Role, NavItem[]> = {
     { label: "Configuración",     path: "/config",                     rgb: "100,116,139"               },
   ],
   ADMIN: [
-    { label: "Dashboard",         path: "/dashboard",                  rgb: "21,101,192",  exact: true },
+    { label: "Inicio",         path: "/dashboard",                  rgb: "21,101,192",  exact: true },
     { label: "Parte Diario",      path: "/parte-diario",               rgb: "109,191,60"               },
     { label: "Reportes",          path: "/dashboard/reportes/horas",   rgb: "217,119,6",   dividerBefore: true },
     { label: "Administración",    path: "/admin",                      rgb: "38,166,154",  dividerBefore: true },
   ],
   COORDINADOR: [
-    { label: "Dashboard",         path: "/dashboard",                  rgb: "21,101,192",  exact: true },
+    { label: "Inicio",         path: "/dashboard",                  rgb: "21,101,192",  exact: true },
     { label: "Parte Diario",      path: "/parte-diario",               rgb: "109,191,60"               },
     { label: "Nueva Convocatoria",path: "/dashboard/nueva",            rgb: "21,101,192",  dividerBefore: true },
     { label: "Reportes",          path: "/dashboard/reportes/horas",   rgb: "217,119,6"                },

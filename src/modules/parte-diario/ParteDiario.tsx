@@ -364,8 +364,29 @@ export function ParteDiario() {
       if (!result[sede][sector]) result[sede][sector] = [];
       result[sede][sector].push(c);
     }
+
+    // Inject guardias fijas as virtual convs into the same Gantt timeline
+    for (const o of guardiasFijasDelDia) {
+      const sedeNombre = o.sede || "(Sin sede)";
+      if (zona !== "todos" && sedeZona(sedeNombre) !== zona) continue;
+      if (filtroSede && sedeNombre !== filtroSede) continue;
+      if (filtroSector && o.sector !== filtroSector) continue;
+      const sector = o.sector || "(Sin sector)";
+      if (!result[sedeNombre]) result[sedeNombre] = {};
+      if (!result[sedeNombre][sector]) result[sedeNombre][sector] = [];
+      result[sedeNombre][sector].push({
+        id: `__gf__${o.guardiaFijaId}_${o.inicio}`,
+        inicio: o.inicio, fin: o.fin,
+        sector: o.sector, sede: o.sede,
+        estado: "CUBIERTA", cupos: 1,
+        asignaciones: [{ id: `__gfa__${o.guardiaFijaId}`, medicoId: o.medicoId, estado: "CONFIRMADA" }],
+        invitaciones: [],
+        _esGuardiaFija: true,
+      });
+    }
+
     return result;
-  }, [forDay, zona, filtroSede, filtroSector]);
+  }, [forDay, zona, filtroSede, filtroSector, guardiasFijasDelDia]);
 
   const selectedConv = useMemo(
     () => selectedConvId ? allConvs.find(c => c.id === selectedConvId) ?? null : null,
@@ -643,8 +664,10 @@ export function ParteDiario() {
                             return (
                               <div
                                 key={c.id}
-                                title={`${c.sector} · ${c.estado}\n${fmtTime(c.inicio)} → ${fmtTime(c.fin)}\n${asignados.length ? "Médicos: " + asignados.join(", ") : "Sin asignación · clic para gestionar"}`}
-                                onClick={() => setSelectedConvId(c.id === selectedConvId ? null : c.id)}
+                                title={c._esGuardiaFija
+                                  ? `GUARDIA FIJA · ${c.sector}\n${fmtTime(c.inicio)} → ${fmtTime(c.fin)}\n${asignados.join(", ")}`
+                                  : `${c.sector} · ${c.estado}\n${fmtTime(c.inicio)} → ${fmtTime(c.fin)}\n${asignados.length ? "Médicos: " + asignados.join(", ") : "Sin asignación · clic para gestionar"}`}
+                                onClick={() => { if (!c._esGuardiaFija) setSelectedConvId(c.id === selectedConvId ? null : c.id); }}
                                 style={{
                                   position: "absolute",
                                   left: `${left}%`,
@@ -655,19 +678,26 @@ export function ParteDiario() {
                                   border: isSelected
                                     ? `2px solid rgb(${col.rgb})`
                                     : `1.5px solid ${col.border}`,
-                                  display: "flex", alignItems: "center",
+                                  display: "flex", alignItems: "center", gap: 4,
                                   padding: "0 7px",
                                   overflow: "hidden",
-                                  cursor: "pointer",
+                                  cursor: c._esGuardiaFija ? "default" : "pointer",
                                   boxShadow: isSelected ? `0 0 0 3px rgba(${col.rgb},0.20)` : undefined,
                                   transition: "all 0.15s",
                                 }}
                               >
-                                <span style={{ fontSize: 11, fontWeight: 600, color: col.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                <span style={{ fontSize: 11, fontWeight: 600, color: col.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>
                                   {asignados.length > 0
                                     ? asignados.join(", ")
                                     : c.estado === "CANCELADA" ? "Cancelada" : "Sin cobertura"}
                                 </span>
+                                {c._esGuardiaFija && (
+                                  <span style={{
+                                    fontSize: 9, fontWeight: 800, padding: "1px 4px",
+                                    borderRadius: 3, background: "rgba(45,122,15,0.25)",
+                                    color: "rgb(45,122,15)", letterSpacing: "0.05em", flexShrink: 0,
+                                  }}>FIJA</span>
+                                )}
                               </div>
                             );
                           })}
@@ -684,17 +714,27 @@ export function ParteDiario() {
                             return (
                               <div
                                 key={c.id}
-                                onClick={() => setSelectedConvId(c.id === selectedConvId ? null : c.id)}
+                                onClick={() => { if (!c._esGuardiaFija) setSelectedConvId(c.id === selectedConvId ? null : c.id); }}
                                 style={{
-                                  fontSize: 11, lineHeight: 1.3, cursor: "pointer",
+                                  fontSize: 11, lineHeight: 1.3,
+                                  cursor: c._esGuardiaFija ? "default" : "pointer",
                                   padding: "3px 6px", borderRadius: 6,
                                   background: isSelected ? `rgba(${col.rgb},0.08)` : "transparent",
                                   transition: "background 0.12s",
                                 }}
                               >
-                                <span style={{ fontWeight: 600, color: col.text }}>
-                                  {fmtTime(c.inicio)}–{fmtTime(c.fin)}
-                                </span>
+                                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                  <span style={{ fontWeight: 600, color: col.text }}>
+                                    {fmtTime(c.inicio)}–{fmtTime(c.fin)}
+                                  </span>
+                                  {c._esGuardiaFija && (
+                                    <span style={{
+                                      fontSize: 9, fontWeight: 800, padding: "1px 4px",
+                                      borderRadius: 3, background: "rgba(45,122,15,0.25)",
+                                      color: "rgb(45,122,15)", letterSpacing: "0.05em",
+                                    }}>FIJA</span>
+                                  )}
+                                </div>
                                 {asignados.length > 0 ? (
                                   asignados.map((a: any) => (
                                     <div key={a.id} style={{ color: "var(--text)", marginTop: 1 }}>
@@ -716,56 +756,6 @@ export function ParteDiario() {
             ))
           )}
 
-          {/* ── Guardias Fijas del día ── */}
-          {guardiasFijasDelDia.length > 0 && (
-            <div style={{
-              background: "var(--surface)", border: "1px solid rgba(109,191,60,0.30)",
-              borderRadius: 14, overflow: "hidden", boxShadow: "var(--shadow-sm)",
-              marginTop: 16,
-            }}>
-              <div style={{
-                display: "flex", alignItems: "center", gap: 8,
-                padding: "10px 18px", borderBottom: "1px solid rgba(109,191,60,0.20)",
-                background: "rgba(109,191,60,0.05)",
-              }}>
-                <div style={{ width: 9, height: 9, borderRadius: "50%", background: "rgb(109,191,60)" }} />
-                <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>
-                  Guardias Fijas · {guardiasFijasDelDia.length}
-                </span>
-                <span style={{ fontSize: 12, color: "var(--muted)" }}>proyección automática del día</span>
-              </div>
-              <div style={{ padding: "10px 18px", display: "grid", gap: 8 }}>
-                {guardiasFijasDelDia.map(g => {
-                  const m = allMedicos.find(med => med.userId === g.medicoId);
-                  return (
-                    <div key={g.id + g.inicio} style={{
-                      display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
-                      padding: "8px 12px", borderRadius: 10,
-                      background: "rgba(109,191,60,0.07)", border: "1px solid rgba(109,191,60,0.20)",
-                    }}>
-                      <div style={{
-                        padding: "2px 8px", borderRadius: 6, fontSize: 11.5, fontWeight: 700,
-                        background: "rgba(109,191,60,0.15)", color: "rgb(45,122,15)", whiteSpace: "nowrap",
-                      }}>
-                        {fmtTime(g.inicio)} – {fmtTime(g.fin)}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <span style={{ fontWeight: 600, fontSize: 13, color: "var(--text)" }}>
-                          {m?.displayName ?? g.medicoId}
-                        </span>
-                        {m?.especialidad && (
-                          <span style={{ fontSize: 11.5, color: "var(--muted)", marginLeft: 6 }}>{m.especialidad}</span>
-                        )}
-                      </div>
-                      <div style={{ fontSize: 12, color: "var(--muted)" }}>{g.sector}</div>
-                      {g.sede && <div style={{ fontSize: 12, color: "var(--subtle)" }}>{g.sede}</div>}
-                      {g.notas && <div style={{ fontSize: 11.5, color: "var(--muted)", fontStyle: "italic" }}>{g.notas}</div>}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
 
         {/* ── Edit panel ── */}

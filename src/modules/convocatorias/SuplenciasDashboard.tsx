@@ -814,7 +814,7 @@ export function SuplenciasDashboard() {
       {/* ── Header ── */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18, flexWrap: "wrap", gap: 12 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, letterSpacing: "-0.03em" }}>Dashboard</h1>
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, letterSpacing: "-0.03em" }}>Inicio</h1>
           <p style={{ margin: "3px 0 0", fontSize: 12, color: "var(--subtle)" }}>
             Refresh cada {Math.round(AUTO_REFRESH_MS / 1000)}s · solo pestaña activa
           </p>
