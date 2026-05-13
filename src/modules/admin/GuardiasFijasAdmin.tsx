@@ -572,7 +572,7 @@ export function GuardiasFijasAdmin() {
             <button onClick={() => { setMode("none"); setStaged([]); }} style={gBtn}>Cancelar</button>
             {staged.length > 0 && (
               <span style={{ fontSize: 12, color: "var(--muted)", marginLeft: 4 }}>
-                → {staged.length} registro{staged.length > 1 ? "s" : ""} nuevo{staged.length > 1 ? "s" : ""} para {medMap.get(cr.medicoId)?.displayName ?? cr.medicoId || "médico sin seleccionar"}
+                → {staged.length} registro{staged.length > 1 ? "s" : ""} nuevo{staged.length > 1 ? "s" : ""} para {(medMap.get(cr.medicoId)?.displayName ?? cr.medicoId) || "médico sin seleccionar"}
               </span>
             )}
           </div>
