@@ -68,7 +68,7 @@ export function MedicosAdmin() {
   const list = useMemo(() => medicosStore.list(), [tick]);
 
   function norm(s?: string) {
-    return (s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+    return (s ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   }
 
   const listFiltrada = useMemo(() => {
