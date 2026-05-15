@@ -6,6 +6,7 @@ import { medicosStore } from "../admin/medicos.store";
 import { sedesStore } from "../admin/sedes.store";
 import { guardiasFijasStore } from "../admin/guardias-fijas.store";
 import { especialidadesStore } from "../admin/especialidades.store";
+import { DistribucionPanel } from "./DistribucionPanel";
 
 // ── Date helpers ──────────────────────────────────────────────────────────
 function todayStr() { return new Date().toISOString().slice(0, 10); }
@@ -17,6 +18,26 @@ function addDays(dateStr: string, n: number): string {
 function fmtDate(dateStr: string): string {
   return new Date(dateStr + "T12:00:00").toLocaleDateString("es-UY", {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
+  });
+}
+function getMondayOf(dateStr: string): string {
+  const d = new Date(dateStr + "T12:00:00");
+  const dow = d.getDay(); // 0=Dom, 1=Lun
+  const diff = dow === 0 ? -6 : 1 - dow;
+  return addDays(dateStr, diff);
+}
+function getWeekDays(dateStr: string): { dateStr: string; label: string; shortLabel: string; isToday: boolean }[] {
+  const monday = getMondayOf(dateStr);
+  const today = todayStr();
+  return Array.from({ length: 7 }, (_, i) => {
+    const ds = addDays(monday, i);
+    const d = new Date(ds + "T12:00:00");
+    return {
+      dateStr: ds,
+      label: d.toLocaleDateString("es-UY", { weekday: "short", day: "numeric", month: "short" }),
+      shortLabel: d.toLocaleDateString("es-UY", { weekday: "short", day: "numeric" }),
+      isToday: ds === today,
+    };
   });
 }
 function fmtTime(isoStr: string) {
@@ -115,8 +136,15 @@ function EditPanel({
   }
 
   function asignarMedico(medicoId: string) {
-    const ok = convocatoriaStore.asignarManual(conv.id, medicoId, nota || undefined);
-    if (!ok) { alert("El médico ya tiene una asignación activa en esta convocatoria."); return; }
+    const result = convocatoriaStore.asignarManual(conv.id, medicoId, nota || undefined);
+    if (!result.ok) {
+      if (result.reason === "conflict") {
+        alert("No se puede asignar: el médico ya tiene un turno confirmado que se superpone en el mismo horario.");
+      } else {
+        alert("El médico ya tiene una asignación activa en esta convocatoria.");
+      }
+      return;
+    }
     setShowSelector(false);
     setSearch("");
     setNota("");
@@ -295,6 +323,149 @@ function EditPanel({
   );
 }
 
+// ── Weekly grid ───────────────────────────────────────────────────────────
+function WeeklyGrid({
+  weekDays, weekData, medicoName, currentDay, onSelectDay,
+}: {
+  weekDays: { dateStr: string; label: string; shortLabel: string; isToday: boolean }[];
+  weekData: {
+    rows: { sede: string; sector: string }[];
+    grid: Map<string, Map<string, { convs: any[]; cubierta: number; parcial: number; enviada: number; vencida: number }>>;
+  };
+  medicoName: (id: string) => string;
+  currentDay: string;
+  onSelectDay: (d: string) => void;
+}) {
+  const COL_W = 130;
+
+  function cellBg(cubierta: number, parcial: number, enviada: number, vencida: number, total: number) {
+    if (total === 0) return { bg: "transparent", border: "var(--border-2)", text: "var(--subtle)" };
+    if (cubierta === total) return { bg: "rgba(22,163,74,0.10)", border: "rgba(22,163,74,0.30)", text: "rgb(20,130,60)" };
+    if (vencida > 0 && enviada === 0 && cubierta === 0) return { bg: "rgba(220,38,38,0.09)", border: "rgba(220,38,38,0.28)", text: "rgb(185,28,28)" };
+    if (enviada > 0 || parcial > 0) return { bg: "rgba(21,101,192,0.09)", border: "rgba(21,101,192,0.28)", text: "var(--blue)" };
+    return { bg: "rgba(217,119,6,0.09)", border: "rgba(217,119,6,0.28)", text: "rgb(150,80,0)" };
+  }
+
+  if (weekData.rows.length === 0) {
+    return (
+      <div style={{
+        textAlign: "center", padding: "60px 20px",
+        background: "var(--surface)", border: "1px solid var(--border)",
+        borderRadius: 16, color: "var(--text)",
+      }}>
+        <div style={{ fontSize: 32, marginBottom: 10 }}>📋</div>
+        <p style={{ margin: 0, fontWeight: 600 }}>Sin convocatorias esta semana</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      background: "var(--surface)", border: "1px solid var(--border)",
+      borderRadius: 16, overflow: "hidden", boxShadow: "var(--shadow-sm)",
+    }}>
+      <div style={{ overflowX: "auto" }}>
+        <div style={{ minWidth: 200 + COL_W * 7 }}>
+          {/* Header row */}
+          <div style={{
+            display: "flex", borderBottom: "2px solid var(--border-2)",
+            background: "var(--surface-2)",
+          }}>
+            <div style={{ width: 200, flexShrink: 0, padding: "10px 16px", fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Sede / Sector
+            </div>
+            {weekDays.map(wd => (
+              <div key={wd.dateStr}
+                onClick={() => onSelectDay(wd.dateStr)}
+                style={{
+                  width: COL_W, flexShrink: 0, padding: "10px 8px", textAlign: "center",
+                  fontSize: 12, fontWeight: wd.isToday ? 800 : 600,
+                  color: wd.isToday ? "var(--blue)" : "var(--text)",
+                  background: wd.isToday ? "rgba(21,101,192,0.07)" : "transparent",
+                  borderLeft: "1px solid var(--border-2)",
+                  cursor: "pointer",
+                  borderBottom: wd.dateStr === currentDay ? "3px solid var(--blue)" : "none",
+                }}
+              >
+                {wd.label}
+              </div>
+            ))}
+          </div>
+
+          {/* Data rows */}
+          {weekData.rows.map((row, ri) => {
+            const key = `${row.sede}|||${row.sector}`;
+            const dayMap = weekData.grid.get(key);
+            return (
+              <div key={key} style={{
+                display: "flex", alignItems: "stretch",
+                borderBottom: ri < weekData.rows.length - 1 ? "1px solid var(--border-2)" : "none",
+                minHeight: 56,
+              }}>
+                {/* Label */}
+                <div style={{
+                  width: 200, flexShrink: 0, padding: "8px 16px",
+                  display: "flex", flexDirection: "column", justifyContent: "center",
+                  borderRight: "1px solid var(--border-2)",
+                }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)" }}>{row.sede}</div>
+                  <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 1 }}>{row.sector}</div>
+                </div>
+
+                {/* Day cells */}
+                {weekDays.map(wd => {
+                  const cell = dayMap?.get(wd.dateStr) ?? { convs: [], cubierta: 0, parcial: 0, enviada: 0, vencida: 0 };
+                  const { cubierta, parcial, enviada, vencida, convs } = cell;
+                  const total = convs.length;
+                  const col = cellBg(cubierta, parcial, enviada, vencida, total);
+                  const confirmados = convs.flatMap(c =>
+                    (c.asignaciones || []).filter((a: any) => a.estado === "CONFIRMADA" || a.estado === "CUMPLIDA")
+                  );
+
+                  return (
+                    <div key={wd.dateStr}
+                      onClick={() => { if (total > 0) onSelectDay(wd.dateStr); }}
+                      style={{
+                        width: COL_W, flexShrink: 0, padding: "6px 8px",
+                        borderLeft: "1px solid var(--border-2)",
+                        background: wd.dateStr === currentDay ? "rgba(21,101,192,0.04)" : col.bg,
+                        cursor: total > 0 ? "pointer" : "default",
+                        display: "flex", flexDirection: "column", justifyContent: "center",
+                        transition: "background 0.12s",
+                      }}
+                      onMouseEnter={e => { if (total > 0) (e.currentTarget as HTMLElement).style.opacity = "0.8"; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
+                    >
+                      {total === 0 ? (
+                        <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--border-2)", margin: "auto" }} />
+                      ) : (
+                        <>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: col.text, marginBottom: 2 }}>
+                            {cubierta === total ? "✓ Cubierto" :
+                             cubierta > 0 ? `${cubierta}/${total} cubierto` :
+                             enviada > 0 ? "En curso" :
+                             vencida > 0 ? "Sin cubrir" : "Parcial"}
+                          </div>
+                          {confirmados.length > 0 && (
+                            <div style={{ fontSize: 10, color: "var(--muted)", lineHeight: 1.3 }}>
+                              {confirmados.slice(0, 2).map((a: any) => medicoName(a.medicoId)).join(", ")}
+                              {confirmados.length > 2 ? ` +${confirmados.length - 2}` : ""}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type Zona = "todos" | "montevideo" | "interior";
 
 // ── ParteDiario ───────────────────────────────────────────────────────────
@@ -305,6 +476,8 @@ export function ParteDiario() {
   const [day, setDay] = useState(todayStr);
   const [tick, setTick] = useState(0);
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"daily" | "weekly">("daily");
+  const [showDistribucion, setShowDistribucion] = useState(false);
 
   // Filtros
   const [zona, setZona]           = useState<Zona>("todos");
@@ -429,6 +602,56 @@ export function ParteDiario() {
     [selectedConvId, allConvs]
   );
 
+  // Alertas críticas: turnos sin cubrir en las próximas 4h
+  const alertasCriticas = useMemo(() => {
+    const now = Date.now();
+    const threshold = now + 4 * 60 * 60_000;
+    return allConvs.filter(c => {
+      if (c.estado === "CANCELADA" || c.estado === "CUBIERTA") return false;
+      const inicioMs = new Date(c.inicio).getTime();
+      return inicioMs > now && inicioMs <= threshold;
+    });
+  }, [allConvs, tick]);
+
+  // Datos para vista semanal
+  const weekDays = useMemo(() => getWeekDays(day), [day]);
+  const weekData = useMemo(() => {
+    const weekConvs = allConvs.filter(c =>
+      c.estado !== "BORRADOR" &&
+      weekDays.some(wd => overlapsDay(c, wd.dateStr))
+    );
+    const pairsSet = new Set<string>();
+    for (const c of weekConvs) {
+      pairsSet.add(`${c.sede ?? "(Sin sede)"}|||${c.sector ?? "(Sin sector)"}`);
+    }
+    const rows = Array.from(pairsSet).map(p => {
+      const [sede, sector] = p.split("|||");
+      return { sede, sector };
+    }).sort((a, b) => a.sede.localeCompare(b.sede) || a.sector.localeCompare(b.sector));
+
+    const grid = new Map<string, Map<string, { convs: any[]; cubierta: number; parcial: number; enviada: number; vencida: number }>>();
+    for (const row of rows) {
+      const key = `${row.sede}|||${row.sector}`;
+      const dayMap = new Map<string, { convs: any[]; cubierta: number; parcial: number; enviada: number; vencida: number }>();
+      for (const wd of weekDays) {
+        const convs = weekConvs.filter(c =>
+          (c.sede ?? "(Sin sede)") === row.sede &&
+          (c.sector ?? "(Sin sector)") === row.sector &&
+          overlapsDay(c, wd.dateStr)
+        );
+        dayMap.set(wd.dateStr, {
+          convs,
+          cubierta: convs.filter(c => c.estado === "CUBIERTA").length,
+          parcial:  convs.filter(c => c.estado === "PARCIAL").length,
+          enviada:  convs.filter(c => c.estado === "ENVIADA").length,
+          vencida:  convs.filter(c => c.estado === "VENCIDA").length,
+        });
+      }
+      grid.set(key, dayMap);
+    }
+    return { rows, grid };
+  }, [allConvs, weekDays]);
+
   // Summary for day
   const daySummary = useMemo(() => {
     const all = Object.values(grouped).flatMap(s => Object.values(s).flat());
@@ -472,14 +695,29 @@ export function ParteDiario() {
         <div>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, letterSpacing: "-0.03em" }}>Parte Diario</h1>
           <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--muted)", textTransform: "capitalize" }}>
-            {fmtDate(day)}
+            {viewMode === "weekly"
+              ? `Semana del ${weekDays[0].label} al ${weekDays[6].label}`
+              : fmtDate(day)}
           </p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          {/* Toggle vista */}
+          <div style={{ display: "flex", borderRadius: 8, border: "1px solid var(--border)", overflow: "hidden" }}>
+            {([ ["daily", "Diaria"], ["weekly", "Semanal"] ] as const).map(([mode, label]) => (
+              <button key={mode} onClick={() => setViewMode(mode)} style={{
+                padding: "7px 14px", border: "none", borderRight: mode === "daily" ? "1px solid var(--border)" : "none",
+                background: viewMode === mode ? "var(--blue-tint-2)" : "var(--surface)",
+                color: viewMode === mode ? "var(--blue)" : "var(--muted)",
+                fontSize: 13, fontWeight: viewMode === mode ? 700 : 500, cursor: "pointer",
+              }}>{label}</button>
+            ))}
+          </div>
+
+          {/* Nav */}
           {[
-            { label: "← Anterior", action: () => setDay(d => addDays(d, -1)) },
-            { label: "Hoy",        action: () => setDay(todayStr()),           isToday: true },
-            { label: "Siguiente →",action: () => setDay(d => addDays(d, 1))  },
+            { label: "←", action: () => setDay(d => addDays(d, viewMode === "weekly" ? -7 : -1)) },
+            { label: "Hoy", action: () => setDay(todayStr()), isToday: true },
+            { label: "→",  action: () => setDay(d => addDays(d, viewMode === "weekly" ? 7 : 1))  },
           ].map(b => (
             <button key={b.label} onClick={b.action} style={{
               padding: "7px 14px", borderRadius: 8, border: "1px solid var(--border)",
@@ -495,12 +733,46 @@ export function ParteDiario() {
               background: "var(--surface)", fontSize: 13, cursor: "pointer",
             }}
           />
+          {!readonly && (
+            <button onClick={() => setShowDistribucion(true)} style={{
+              padding: "7px 14px", borderRadius: 8, border: "1px solid var(--border)",
+              background: "var(--surface)", fontSize: 13, cursor: "pointer", color: "var(--muted)", fontWeight: 500,
+            }}>Distribución</button>
+          )}
           <button onClick={() => setTick(t => t + 1)} title="Recargar datos" style={{
             padding: "7px 12px", borderRadius: 8, border: "1px solid var(--border)",
             background: "var(--surface)", fontSize: 14, cursor: "pointer", color: "var(--muted)",
           }}>↺</button>
         </div>
       </div>
+
+      {/* ── Alertas críticas ── */}
+      {!readonly && alertasCriticas.length > 0 && (
+        <div style={{
+          marginBottom: 14, padding: "10px 16px", borderRadius: 12,
+          background: "rgba(220,38,38,0.07)", border: "1px solid rgba(220,38,38,0.30)",
+          display: "flex", alignItems: "flex-start", gap: 12,
+        }}>
+          <span style={{ fontSize: 18, flexShrink: 0 }}>⚠️</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: "rgb(185,28,28)", marginBottom: 4 }}>
+              {alertasCriticas.length} turno{alertasCriticas.length !== 1 ? "s" : ""} sin cubrir en las próximas 4h
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {alertasCriticas.map(c => (
+                <button key={c.id} onClick={() => { setDay(c.inicio.slice(0, 10)); setViewMode("daily"); setSelectedConvId(c.id); }}
+                  style={{
+                    padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600,
+                    border: "1px solid rgba(220,38,38,0.30)", background: "rgba(220,38,38,0.08)",
+                    color: "rgb(185,28,28)", cursor: "pointer",
+                  }}>
+                  {c.sector}{c.sede ? ` · ${c.sede}` : ""} — {fmtTime(c.inicio)}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Filtros ── */}
       <div style={{
@@ -575,7 +847,7 @@ export function ParteDiario() {
       </div>
 
       {/* ── Filtro de destaque ── */}
-      <div style={{
+      {viewMode === "daily" && <div style={{
         display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap",
         padding: "8px 14px", borderRadius: 12,
         background: "var(--surface)", border: "1px solid var(--border)",
@@ -632,10 +904,10 @@ export function ParteDiario() {
             ))}
           </>
         )}
-      </div>
+      </div>}
 
       {/* ── Day summary bar ── */}
-      {hasCoverage && (
+      {viewMode === "daily" && hasCoverage && (
         <div style={{
           display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap",
           padding: "10px 14px", borderRadius: 12,
@@ -679,8 +951,19 @@ export function ParteDiario() {
         </div>
       )}
 
+      {/* ── Vista semanal ── */}
+      {viewMode === "weekly" && (
+        <WeeklyGrid
+          weekDays={weekDays}
+          weekData={weekData}
+          medicoName={medicoName}
+          currentDay={day}
+          onSelectDay={d => { setDay(d); setViewMode("daily"); }}
+        />
+      )}
+
       {/* ── Main area: Gantt + Edit panel ── */}
-      <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+      {viewMode === "daily" && <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
 
         {/* ── Gantt ── */}
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -900,7 +1183,9 @@ export function ParteDiario() {
             />
           </div>
         )}
-      </div>
+      </div>}
+
+      {showDistribucion && <DistribucionPanel onClose={() => setShowDistribucion(false)} />}
     </AppShell>
   );
 }

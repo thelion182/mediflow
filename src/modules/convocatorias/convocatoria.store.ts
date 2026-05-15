@@ -13,6 +13,32 @@ const DEFAULT_SIN_RESP_MIN = 60;
 
 const MIN = 60 * 1000;
 
+function overlapsRange(a1: string, a2: string, b1: string, b2: string): boolean {
+  return new Date(a1).getTime() < new Date(b2).getTime() &&
+         new Date(b1).getTime() < new Date(a2).getTime();
+}
+
+function getConflicto(
+  allConvs: Convocatoria[],
+  medicoId: string,
+  excludeConvId: string,
+  inicio: string,
+  fin: string
+): { convId: string; inicio: string; fin: string } | null {
+  for (const c of allConvs) {
+    if (c.id === excludeConvId) continue;
+    if (c.estado === "CANCELADA") continue;
+    for (const a of c.asignaciones ?? []) {
+      if (a.medicoId !== medicoId) continue;
+      if (a.estado !== "CONFIRMADA" && a.estado !== "DEVOLUCION_PENDIENTE") continue;
+      if (overlapsRange(inicio, fin, c.inicio, c.fin)) {
+        return { convId: c.id, inicio: c.inicio, fin: c.fin };
+      }
+    }
+  }
+  return null;
+}
+
 export type MedicoMini = { userId: string; nombre: string };
 
 export function getMedicosCatalogo(): MedicoMini[] {
@@ -400,27 +426,27 @@ export const convocatoriaStore = {
     }
   },
 
-  respond(convId: string, medicoId: string, action: "ACEPTO" | "RECHAZO") {
+  respond(convId: string, medicoId: string, action: "ACEPTO" | "RECHAZO"): { conflict: boolean } {
     const all = storage.get<Convocatoria[]>(KEY, []);
     const idx = all.findIndex(c => c.id === convId);
-    if (idx < 0) return;
+    if (idx < 0) return { conflict: false };
 
     const c = all[idx];
-    if (c.estado === "CANCELADA") return;
+    if (c.estado === "CANCELADA") return { conflict: false };
 
     const adv = autoAdvanceConvocatoria(c);
     if (adv.changed) all[idx] = adv.c;
 
     const inv = (c.invitaciones || []).find(i => i.medicoId === medicoId);
-    if (!inv) return;
+    if (!inv) return { conflict: false };
 
     if (isSequential(c)) {
       const activeIdx = findActiveInvIndex(c);
-      if (activeIdx < 0) return;
-      if (c.invitaciones[activeIdx]?.medicoId !== medicoId) return;
+      if (activeIdx < 0) return { conflict: false };
+      if (c.invitaciones[activeIdx]?.medicoId !== medicoId) return { conflict: false };
     }
 
-    if (inv.estado === "ACEPTO" || inv.estado === "RECHAZO") return;
+    if (inv.estado === "ACEPTO" || inv.estado === "RECHAZO") return { conflict: false };
 
     const venc = new Date(c.vencimiento).getTime();
     if (Date.now() > venc) {
@@ -428,7 +454,7 @@ export const convocatoriaStore = {
       inv.respondedAt = nowIso();
       c.updatedAt = nowIso();
       storage.set(KEY, all);
-      return;
+      return { conflict: false };
     }
 
     if (action === "RECHAZO") {
@@ -443,7 +469,23 @@ export const convocatoriaStore = {
       c.estado = computeEstado(c);
       c.updatedAt = nowIso();
       storage.set(KEY, all);
-      return;
+      return { conflict: false };
+    }
+
+    // ACEPTO — verificar superposición horaria con otros turnos confirmados
+    const conflicto = getConflicto(all, medicoId, convId, c.inicio, c.fin);
+    if (conflicto) {
+      // Auto-rechazar: el médico no puede estar en dos lugares a la vez
+      inv.estado = "RECHAZO";
+      inv.respondedAt = nowIso();
+      if (isSequential(c)) {
+        const nextIdx = findNextWaitingIndex(c);
+        if (nextIdx >= 0) activateInv(c.invitaciones[nextIdx]);
+      }
+      c.estado = computeEstado(c);
+      c.updatedAt = nowIso();
+      storage.set(KEY, all);
+      return { conflict: true };
     }
 
     inv.estado = "ACEPTO";
@@ -482,6 +524,7 @@ export const convocatoriaStore = {
 
     c.updatedAt = nowIso();
     storage.set(KEY, all);
+    return { conflict: false };
   },
 
   closeAsignacion(convId: string, asignacionId: string, result: "CUMPLIDA" | "NO_CUMPLIDA", nota?: string) {
@@ -638,16 +681,20 @@ export const convocatoriaStore = {
     return true;
   },
 
-  asignarManual(convId: string, medicoId: string, nota?: string): boolean {
+  asignarManual(convId: string, medicoId: string, nota?: string): { ok: boolean; reason: "ok" | "duplicate" | "conflict" } {
     const all = storage.get<Convocatoria[]>(KEY, []);
     const idx = all.findIndex(c => c.id === convId);
-    if (idx < 0) return false;
+    if (idx < 0) return { ok: false, reason: "ok" };
 
     const c = all[idx];
+
     const existing = (c.asignaciones || []).find(
       a => a.medicoId === medicoId && a.estado === "CONFIRMADA"
     );
-    if (existing) return false;
+    if (existing) return { ok: false, reason: "duplicate" };
+
+    const conflicto = getConflicto(all, medicoId, convId, c.inicio, c.fin);
+    if (conflicto) return { ok: false, reason: "conflict" };
 
     const asign: Asignacion = {
       id: newId("A"),
@@ -661,6 +708,6 @@ export const convocatoriaStore = {
     c.estado = computeEstado(c);
     c.updatedAt = nowIso();
     storage.set(KEY, all);
-    return true;
+    return { ok: true, reason: "ok" };
   }
 };

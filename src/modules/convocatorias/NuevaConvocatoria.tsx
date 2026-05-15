@@ -157,6 +157,9 @@ export function NuevaConvocatoria() {
   // ── Prioridad de destinatarios ─────────────────────────────────────────
   const [prioMode, setPrioMode] = useState<PrioMode>("SCORING");
 
+  // ── Distribución justa ────────────────────────────────────────────────
+  const [distribucionJusta, setDistribucionJusta] = useState(false);
+
   // ── Auto-renovación ────────────────────────────────────────────────────
   const [autoRenew,         setAutoRenew]         = useState(false);
   const [autoRenewMinutes,  setAutoRenewMinutes]   = useState(60);
@@ -271,9 +274,16 @@ export function NuevaConvocatoria() {
     return [...list].sort((a: any, b: any) => {
       const pa = prioEff(a.userId, a.prioridad);
       const pb = prioEff(b.userId, b.prioridad);
-      return pa !== pb ? pa - pb : String(a.displayName).localeCompare(String(b.displayName));
+      if (pa !== pb) return pa - pb;
+      // Distribución justa: menos guardias este mes → primero
+      if (distribucionJusta) {
+        const ga = medicosActividad.get(a.userId)?.confirmadas ?? 0;
+        const gb = medicosActividad.get(b.userId)?.confirmadas ?? 0;
+        if (ga !== gb) return ga - gb;
+      }
+      return String(a.displayName).localeCompare(String(b.displayName));
     });
-  }, [medicosOrdenados, tipoSel, gremioSel, cargoSel, sectorIdSel, qMedico, JSON.stringify(prioOverride)]);
+  }, [medicosOrdenados, tipoSel, gremioSel, cargoSel, sectorIdSel, qMedico, JSON.stringify(prioOverride), distribucionJusta, medicosActividad]);
 
   const destinatarios = useMemo(() =>
     medicosVisibles.map((m: any) => m.userId).filter(id => !!dest[id]),
@@ -521,6 +531,35 @@ export function NuevaConvocatoria() {
                     {" "}Al enviar quedará un registro de auditoría para revisión del Super Admin.
                   </div>
                 )}
+              </div>
+
+              {/* Distribución justa */}
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+                  <div
+                    onClick={() => setDistribucionJusta(v => !v)}
+                    style={{
+                      width: 40, height: 22, borderRadius: 11, flexShrink: 0,
+                      background: distribucionJusta ? "rgb(22,163,74)" : "var(--border)",
+                      position: "relative", cursor: "pointer", transition: "background 0.2s",
+                    }}
+                  >
+                    <div style={{
+                      position: "absolute", top: 3, left: distribucionJusta ? 21 : 3,
+                      width: 16, height: 16, borderRadius: "50%",
+                      background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                      transition: "left 0.2s",
+                    }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
+                      Priorizar distribución justa
+                    </div>
+                    <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>
+                      Dentro del mismo nivel de prioridad, los médicos con menos guardias este mes van primero
+                    </div>
+                  </div>
+                </label>
               </div>
             </div>
           </Panel>

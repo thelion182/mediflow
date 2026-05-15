@@ -324,7 +324,13 @@ export function MedicoHome() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.userId, pendientesKey]);
 
-  function aceptar(convId: string)  { convocatoriaStore.respond(convId, session.userId, "ACEPTO");  setTick(t => t + 1); }
+  function aceptar(convId: string) {
+    const result = convocatoriaStore.respond(convId, session.userId, "ACEPTO");
+    if (result.conflict) {
+      alert("No podés aceptar esta guardia: ya tenés un turno confirmado que se superpone en el mismo horario.");
+    }
+    setTick(t => t + 1);
+  }
   function rechazar(convId: string) { convocatoriaStore.respond(convId, session.userId, "RECHAZO"); setTick(t => t + 1); }
   function onWA(convId: string, accion: "ACEPTO" | "RECHAZO") {
     const msg = `Hola Suplencias, soy ${session.displayName} (${session.userId}). Respecto a la convocatoria ${convId}: ${accion}. Lo registro también en Mediflow.`;
