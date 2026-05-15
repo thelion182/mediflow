@@ -681,6 +681,33 @@ export const convocatoriaStore = {
     return true;
   },
 
+  reenviarInvitacion(convId: string, medicoId: string): { ok: boolean; reason: "ok" | "not_found" | "wrong_state" } {
+    const all = storage.get<Convocatoria[]>(KEY, []);
+    const idx = all.findIndex(c => c.id === convId);
+    if (idx < 0) return { ok: false, reason: "not_found" };
+
+    const c = all[idx];
+    if (c.estado === "CANCELADA" || c.estado === "CUBIERTA") return { ok: false, reason: "wrong_state" };
+
+    const inv = (c.invitaciones || []).find(i => i.medicoId === medicoId);
+    if (!inv) return { ok: false, reason: "not_found" };
+
+    if (inv.estado !== "VENCIDA" && inv.estado !== "SIN_RESPUESTA" && inv.estado !== "CUBIERTA_X_OTRO") {
+      return { ok: false, reason: "wrong_state" };
+    }
+
+    inv.estado = "ENVIADA";
+    inv.sentAt = nowIso();
+    delete (inv as any).seenAt;
+    delete (inv as any).respondedAt;
+
+    // Si la conv estaba vencida, la revivimos
+    c.estado = computeEstado(c);
+    c.updatedAt = nowIso();
+    storage.set(KEY, all);
+    return { ok: true, reason: "ok" };
+  },
+
   asignarManual(convId: string, medicoId: string, nota?: string): { ok: boolean; reason: "ok" | "duplicate" | "conflict" } {
     const all = storage.get<Convocatoria[]>(KEY, []);
     const idx = all.findIndex(c => c.id === convId);

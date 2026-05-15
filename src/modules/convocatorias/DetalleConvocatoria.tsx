@@ -270,6 +270,32 @@ export function DetalleConvocatoria() {
     );
   }
 
+  function msgRecordatorio(medicoId: string) {
+    return (
+      `Mediflow · Círculo Católico\n` +
+      `Recordatorio: se re-envía convocatoria ${c.id}.\n` +
+      `Sector: ${c.sector}${c.sede ? ` · ${c.sede}` : ""}\n` +
+      `Turno: ${fmt(c.inicio)} → ${fmt(c.fin)}\n` +
+      `Por favor ingresá a la app y respondé.\n` +
+      `Gracias.`
+    );
+  }
+
+  function reenviarA(medicoId: string) {
+    const result = convocatoriaStore.reenviarInvitacion(c.id, medicoId);
+    if (!result.ok) {
+      alert("No se puede reenviar en el estado actual de esa invitación.");
+      return;
+    }
+    setTick(t => t + 1);
+    const tel = convocatoriaStore.getMedicoPhone(medicoId);
+    if (tel) {
+      window.open(waLink(tel, msgRecordatorio(medicoId)), "_blank");
+    } else {
+      alert("Invitación reenviada. El médico no tiene teléfono cargado.");
+    }
+  }
+
   function onSaveEdit() {
     const sector = form.sector.trim();
     if (!sector) return alert("Sector es obligatorio.");
@@ -612,17 +638,29 @@ export function DetalleConvocatoria() {
                         {tel ? <span className="pill">Tel: {tel}</span> : <span className="pill" style={pillStyle("BAD")}>Sin teléfono</span>}
                       </div>
 
-                      {tel ? (
-                        <a
-                          className="btnGhost"
-                          href={waLink(tel, texto)}
-                          target="_blank"
-                          rel="noreferrer"
-                          title="Aviso por WhatsApp (canal secundario)"
-                        >
-                          WhatsApp
-                        </a>
-                      ) : null}
+                      <div className="row" style={{ gap: 6 }}>
+                        {(inv.estado === "VENCIDA" || inv.estado === "SIN_RESPUESTA" || inv.estado === "CUBIERTA_X_OTRO") && c.estado !== "CANCELADA" && c.estado !== "CUBIERTA" && (
+                          <button
+                            className="btnGhost"
+                            onClick={() => reenviarA(inv.medicoId)}
+                            style={{ borderColor: "rgba(21,101,192,0.35)", color: "rgb(21,101,192)", fontSize: 12 }}
+                            title="Re-activa la invitación y abre WhatsApp con recordatorio"
+                          >
+                            ↩ Reenviar
+                          </button>
+                        )}
+                        {tel ? (
+                          <a
+                            className="btnGhost"
+                            href={waLink(tel, texto)}
+                            target="_blank"
+                            rel="noreferrer"
+                            title="Aviso por WhatsApp (canal secundario)"
+                          >
+                            WhatsApp
+                          </a>
+                        ) : null}
+                      </div>
                     </div>
 
                     <div className="sub" style={{ marginTop: 6 }}>
