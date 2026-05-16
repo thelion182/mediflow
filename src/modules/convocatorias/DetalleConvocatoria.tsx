@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { authStore } from "../../auth/auth.store";
 import { convocatoriaStore, getMedicosCatalogo } from "./convocatoria.store";
+import { configStore } from "../config/config.store";
 import { AppShell } from "../../ui/AppShell";
 import type { Canal } from "./convocatoria.types";
 import { CANAL_META } from "../config/config.types";
@@ -209,55 +210,25 @@ export function DetalleConvocatoria() {
   const invitacionesOrdenadas = useMemo(() => [...(c.invitaciones || [])], [c.id, tick]);
 
   // ── Messages ──────────────────────────────────────────────────────────
-  function lugar() {
-    return c.sede ? `${c.sector} · ${c.sede}` : c.sector;
+  function applyTemplate(template: string): string {
+    const vars: Record<string, string> = {
+      lugar:       c.sede ? `${c.sector} · ${c.sede}` : c.sector,
+      sector:      c.sector,
+      sede:        c.sede || "",
+      fecha:       fmtMsgFecha(c.inicio),
+      hora_inicio: fmtMsgHora(c.inicio),
+      hora_fin:    fmtMsgHora(c.fin),
+      motivo:      c.cancelReason || "—",
+    };
+    return template.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? `{{${k}}}`);
   }
 
-  function msgInvitacion() {
-    return (
-      `Suplencias · Círculo Católico\n` +
-      `Necesitamos guardia para:\n` +
-      `Sector: ${lugar()}\n` +
-      `Fecha: ${fmtMsgFecha(c.inicio)}\n` +
-      `Horario: ${fmtMsgHora(c.inicio)} a ${fmtMsgHora(c.fin)}\n` +
-      `Respondé SI o NO a este mensaje.\n` +
-      `Gracias.`
-    );
-  }
-  function msgCancel() {
-    return (
-      `Suplencias · Círculo Católico\n` +
-      `Se canceló la guardia en:\n` +
-      `Sector: ${lugar()}\n` +
-      `Fecha: ${fmtMsgFecha(c.inicio)}\n` +
-      `Horario: ${fmtMsgHora(c.inicio)} a ${fmtMsgHora(c.fin)}\n` +
-      `Motivo: ${c.cancelReason || "—"}\n` +
-      `Gracias.`
-    );
-  }
-  function msgTurnoActivo(_nextOrd: number) {
-    return (
-      `Suplencias · Círculo Católico\n` +
-      `Hola, sos el siguiente en la lista.\n` +
-      `Necesitamos guardia para:\n` +
-      `Sector: ${lugar()}\n` +
-      `Fecha: ${fmtMsgFecha(c.inicio)}\n` +
-      `Horario: ${fmtMsgHora(c.inicio)} a ${fmtMsgHora(c.fin)}\n` +
-      `Respondé SI o NO a este mensaje a la brevedad.\n` +
-      `Gracias.`
-    );
-  }
-  function msgRecordatorio(_medicoId: string) {
-    return (
-      `Suplencias · Círculo Católico\n` +
-      `Recordatorio: guardia disponible.\n` +
-      `Sector: ${lugar()}\n` +
-      `Fecha: ${fmtMsgFecha(c.inicio)}\n` +
-      `Horario: ${fmtMsgHora(c.inicio)} a ${fmtMsgHora(c.fin)}\n` +
-      `Respondé SI o NO a este mensaje.\n` +
-      `Gracias.`
-    );
-  }
+  const tpls = configStore.get().mensajes;
+
+  function msgInvitacion()                { return applyTemplate(tpls.invitacion); }
+  function msgCancel()                    { return applyTemplate(tpls.cancelacion); }
+  function msgTurnoActivo(_ord: number)   { return applyTemplate(tpls.turnoActivo); }
+  function msgRecordatorio(_id: string)   { return applyTemplate(tpls.recordatorio); }
 
   function reenviarA(medicoId: string) {
     const result = convocatoriaStore.reenviarInvitacion(c.id, medicoId);

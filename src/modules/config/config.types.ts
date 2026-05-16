@@ -63,6 +63,23 @@ export type FotosConfig = {
   extension: "jpg" | "png" | "webp" | "jpeg";
 };
 
+// ── Message templates ─────────────────────────────────────────────────────
+export type MessageTemplates = {
+  invitacion:   string;
+  cancelacion:  string;
+  turnoActivo:  string;
+  recordatorio: string;
+};
+
+// Variables disponibles en templates:
+// {{lugar}}       — sector + sede (o solo sector si no hay sede)
+// {{sector}}      — solo el sector
+// {{sede}}        — solo la sede (vacío si no hay)
+// {{fecha}}       — día formateado (ej: "viernes 16 de mayo de 2026")
+// {{hora_inicio}} — hora de inicio (ej: "08:00")
+// {{hora_fin}}    — hora de fin (ej: "20:00")
+// {{motivo}}      — motivo de cancelación (solo en template cancelacion)
+
 // ── System config ─────────────────────────────────────────────────────────
 export type SystemConfig = {
   organizacion: {
@@ -93,6 +110,7 @@ export type SystemConfig = {
     pesoPuntualidad: number;
     pesoDisponibilidad: number;
   };
+  mensajes: MessageTemplates;
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────

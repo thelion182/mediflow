@@ -1,4 +1,4 @@
-﻿import React, { useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { AppShell } from "../../ui/AppShell";
 import { authStore } from "../../auth/auth.store";
 import { convocatoriaStore } from "../convocatorias/convocatoria.store";
@@ -7,6 +7,7 @@ import { sedesStore } from "../admin/sedes.store";
 import { guardiasFijasStore } from "../admin/guardias-fijas.store";
 import { especialidadesStore } from "../admin/especialidades.store";
 import { DistribucionPanel } from "./DistribucionPanel";
+import { storage } from "../../core/storage";
 
 // ── Date helpers ──────────────────────────────────────────────────────────
 function todayStr() { return new Date().toISOString().slice(0, 10); }
@@ -479,10 +480,18 @@ export function ParteDiario() {
   const [viewMode, setViewMode] = useState<"daily" | "weekly">("daily");
   const [showDistribucion, setShowDistribucion] = useState(false);
 
-  // Filtros
-  const [zona, setZona]           = useState<Zona>("todos");
-  const [filtroSede, setFiltroSede]     = useState("");
-  const [filtroSector, setFiltroSector] = useState("");
+  // Filtros — persisten por usuario
+  const filtrosKey = `mediflow.pd.filtros.${session?.userId ?? "anon"}`;
+  type FiltrosPersisted = { zona: Zona; filtroSede: string; filtroSector: string };
+  const savedFiltros = storage.get<FiltrosPersisted>(filtrosKey, { zona: "todos", filtroSede: "", filtroSector: "" });
+
+  const [zona, _setZona]               = useState<Zona>(savedFiltros.zona);
+  const [filtroSede, _setFiltroSede]   = useState(savedFiltros.filtroSede);
+  const [filtroSector, _setFiltroSector] = useState(savedFiltros.filtroSector);
+
+  function setZona(v: Zona)        { _setZona(v);        storage.set(filtrosKey, { zona: v,    filtroSede, filtroSector }); }
+  function setFiltroSede(v: string)   { _setFiltroSede(v);   storage.set(filtrosKey, { zona, filtroSede: v,    filtroSector }); }
+  function setFiltroSector(v: string) { _setFiltroSector(v); storage.set(filtrosKey, { zona, filtroSede, filtroSector: v }); }
 
   type FiltroDestaque = { tipo: "GREMIO" | "TIPO" | "ESPECIALIDAD"; valor: string };
   const [filtroD, setFiltroD] = useState<FiltroDestaque | null>(null);

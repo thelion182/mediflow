@@ -4,10 +4,10 @@ import { configStore } from "./config.store";
 import { authStore } from "../../auth/auth.store";
 import { UsersAdmin } from "./UsersAdmin";
 import { prioAuditStore, type PrioAuditEntry } from "../convocatorias/prio.audit.store";
-import type { SystemConfig, Canal, WhatsAppProvider, SmsProvider, EmailProvider, FotosConfig } from "./config.types";
+import type { SystemConfig, Canal, WhatsAppProvider, SmsProvider, EmailProvider, FotosConfig, MessageTemplates } from "./config.types";
 import { CANAL_META } from "./config.types";
 
-type Tab = "usuarios" | "org" | "canales" | "defaults" | "scoring" | "auditoria";
+type Tab = "usuarios" | "org" | "canales" | "defaults" | "scoring" | "auditoria" | "mensajes";
 
 // ── Toggle ────────────────────────────────────────────────────────────────
 function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
@@ -141,6 +141,9 @@ export function ConfigPage() {
   function setFotos<K extends keyof FotosConfig>(k: K, v: any) {
     setCfg(c => ({ ...c, fotos: { ...c.fotos, [k]: v } }));
   }
+  function setMensaje<K extends keyof MessageTemplates>(k: K, v: string) {
+    setCfg(c => ({ ...c, mensajes: { ...c.mensajes, [k]: v } }));
+  }
   function toggleDefaultCanal(canal: Canal) {
     setCfg(c => {
       const prev = c.defaultCanales;
@@ -155,7 +158,10 @@ export function ConfigPage() {
     { id: "defaults",  label: "Convocatorias" },
     { id: "scoring",   label: "Scoring" },
     { id: "org",       label: "Organización" },
-    ...(session?.role === "SUPER_ADMIN" ? [{ id: "auditoria" as Tab, label: "Auditoría prioridades" }] : []),
+    ...(session?.role === "SUPER_ADMIN" ? [
+      { id: "mensajes"   as Tab, label: "Mensajes WA" },
+      { id: "auditoria"  as Tab, label: "Auditoría prioridades" },
+    ] : []),
   ];
 
   return (
@@ -597,6 +603,69 @@ export function ConfigPage() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Tab: Mensajes WA ─────────────────────────────────────────────── */}
+      {tab === "mensajes" && session?.role === "SUPER_ADMIN" && (
+        <div style={{ display: "grid", gap: 16 }}>
+          <div style={sectionStyle}>
+            <h2 style={sectionTitle}>Plantillas de mensajes WhatsApp</h2>
+            <p style={sectionDesc}>
+              Estos textos se usan al abrir WhatsApp desde la pantalla de detalle de una convocatoria.
+              Usá las variables entre llaves dobles para insertar datos del turno.
+            </p>
+            <div style={{
+              display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10, marginBottom: 20,
+              padding: "10px 14px", borderRadius: 8, background: "var(--blue-tint)", border: "1px solid var(--border)",
+            }}>
+              <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--muted)", width: "100%", marginBottom: 4 }}>
+                VARIABLES DISPONIBLES
+              </span>
+              {[
+                ["{{lugar}}",       "sector + sede (o solo sector)"],
+                ["{{sector}}",      "solo el sector"],
+                ["{{sede}}",        "solo la sede (vacío si no hay)"],
+                ["{{fecha}}",       'ej: "viernes 16 de mayo de 2026"'],
+                ["{{hora_inicio}}", 'ej: "08:00"'],
+                ["{{hora_fin}}",    'ej: "20:00"'],
+                ["{{motivo}}",      "motivo de cancelación"],
+              ].map(([v, desc]) => (
+                <span key={v} style={{ fontSize: 12, color: "var(--muted)" }}>
+                  <code style={{ fontFamily: "monospace", fontWeight: 700, color: "var(--blue, rgb(21,101,192))" }}>{v}</code>
+                  {" "}{desc} ·
+                </span>
+              ))}
+            </div>
+            <div style={{ display: "grid", gap: 20 }}>
+              {([
+                { key: "invitacion"   as const, label: "Invitación (botón WA por médico)",          hint: "Se abre al tocar WhatsApp en cada invitación" },
+                { key: "cancelacion"  as const, label: "Cancelación",                               hint: "Cuando la convocatoria está cancelada. Usá {{motivo}}." },
+                { key: "turnoActivo"  as const, label: "Turno activo (SECUENCIAL: activar siguiente)", hint: "Se abre automáticamente al saltar al siguiente en modo secuencial" },
+                { key: "recordatorio" as const, label: "Recordatorio (↩ Reenviar)",                 hint: "Se abre al reenviar una invitación vencida o sin respuesta" },
+              ]).map(({ key, label, hint }) => (
+                <div key={key}>
+                  <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>
+                    {label}
+                  </label>
+                  <p style={{ margin: "0 0 6px", fontSize: 11.5, color: "var(--muted)" }}>{hint}</p>
+                  <textarea
+                    value={cfg.mensajes[key]}
+                    onChange={e => setMensaje(key, e.target.value)}
+                    rows={6}
+                    style={{
+                      ...inputStyle,
+                      fontFamily: "monospace", fontSize: 12.5,
+                      resize: "vertical", minHeight: 110, lineHeight: 1.6,
+                    }}
+                  />
+                  <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--subtle)" }}>
+                    Preview (primera línea): <b>{cfg.mensajes[key].split("\n")[0]}</b>
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 

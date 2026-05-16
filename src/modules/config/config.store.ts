@@ -45,6 +45,16 @@ export const DEFAULT_CONFIG: SystemConfig = {
     pesoPuntualidad: 25,
     pesoDisponibilidad: 10,
   },
+  mensajes: {
+    invitacion:
+      "Suplencias · Círculo Católico\nNecesitamos guardia para:\nSector: {{lugar}}\nFecha: {{fecha}}\nHorario: {{hora_inicio}} a {{hora_fin}}\nRespondé SI o NO a este mensaje.\nGracias.",
+    cancelacion:
+      "Suplencias · Círculo Católico\nSe canceló la guardia en:\nSector: {{lugar}}\nFecha: {{fecha}}\nHorario: {{hora_inicio}} a {{hora_fin}}\nMotivo: {{motivo}}\nGracias.",
+    turnoActivo:
+      "Suplencias · Círculo Católico\nHola, sos el siguiente en la lista.\nNecesitamos guardia para:\nSector: {{lugar}}\nFecha: {{fecha}}\nHorario: {{hora_inicio}} a {{hora_fin}}\nRespondé SI o NO a este mensaje a la brevedad.\nGracias.",
+    recordatorio:
+      "Suplencias · Círculo Católico\nRecordatorio: guardia disponible.\nSector: {{lugar}}\nFecha: {{fecha}}\nHorario: {{hora_inicio}} a {{hora_fin}}\nRespondé SI o NO a este mensaje.\nGracias.",
+  },
 };
 
 export const configStore = {
