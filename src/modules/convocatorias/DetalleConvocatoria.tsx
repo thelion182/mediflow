@@ -51,6 +51,13 @@ function fmt(dtIso?: string) {
   try { return new Date(dtIso).toLocaleString(); } catch { return "—"; }
 }
 
+function fmtMsgFecha(iso: string) {
+  return new Date(iso).toLocaleDateString("es-UY", { weekday: "long", day: "numeric", month: "long" });
+}
+function fmtMsgHora(iso: string) {
+  return new Date(iso).toLocaleTimeString("es-UY", { hour: "2-digit", minute: "2-digit" });
+}
+
 function toDateTimeLocal(iso?: string) {
   if (!iso) return "";
   try {
@@ -202,17 +209,54 @@ export function DetalleConvocatoria() {
   const invitacionesOrdenadas = useMemo(() => [...(c.invitaciones || [])], [c.id, tick]);
 
   // ── Messages ──────────────────────────────────────────────────────────
-  function msgUpdate() {
-    return `Mediflow · Círculo Católico\nConvocatoria ${c.id} fue ACTUALIZADA.\nSector: ${c.sector}${c.sede ? ` · ${c.sede}` : ""}\nTurno: ${fmt(c.inicio)} → ${fmt(c.fin)}\nPor favor revisar en la app.`;
+  function lugar() {
+    return c.sede ? `${c.sector} · ${c.sede}` : c.sector;
+  }
+
+  function msgInvitacion() {
+    return (
+      `Suplencias · Círculo Católico\n` +
+      `Necesitamos guardia para:\n` +
+      `Sector: ${lugar()}\n` +
+      `Fecha: ${fmtMsgFecha(c.inicio)}\n` +
+      `Horario: ${fmtMsgHora(c.inicio)} a ${fmtMsgHora(c.fin)}\n` +
+      `Respondé SI o NO a este mensaje.\n` +
+      `Gracias.`
+    );
   }
   function msgCancel() {
-    return `Mediflow · Círculo Católico\nConvocatoria ${c.id} fue CANCELADA.\nSector: ${c.sector}${c.sede ? ` · ${c.sede}` : ""}\nTurno: ${fmt(c.inicio)} → ${fmt(c.fin)}\nMotivo: ${c.cancelReason || "—"}\nGracias.`;
+    return (
+      `Suplencias · Círculo Católico\n` +
+      `Se canceló la guardia en:\n` +
+      `Sector: ${lugar()}\n` +
+      `Fecha: ${fmtMsgFecha(c.inicio)}\n` +
+      `Horario: ${fmtMsgHora(c.inicio)} a ${fmtMsgHora(c.fin)}\n` +
+      `Motivo: ${c.cancelReason || "—"}\n` +
+      `Gracias.`
+    );
   }
-  function msgTurnoActivo(nextOrd: number) {
-    return `Mediflow · Círculo Católico\nTe toca tu turno (#${nextOrd}) en convocatoria ${c.id}.\nSector: ${c.sector}${c.sede ? ` · ${c.sede}` : ""}\nTurno: ${fmt(c.inicio)} → ${fmt(c.fin)}\nPor favor ingresá a la app y aceptá o rechazá.\nGracias.`;
+  function msgTurnoActivo(_nextOrd: number) {
+    return (
+      `Suplencias · Círculo Católico\n` +
+      `Hola, sos el siguiente en la lista.\n` +
+      `Necesitamos guardia para:\n` +
+      `Sector: ${lugar()}\n` +
+      `Fecha: ${fmtMsgFecha(c.inicio)}\n` +
+      `Horario: ${fmtMsgHora(c.inicio)} a ${fmtMsgHora(c.fin)}\n` +
+      `Respondé SI o NO a este mensaje a la brevedad.\n` +
+      `Gracias.`
+    );
   }
   function msgRecordatorio(_medicoId: string) {
-    return `Mediflow · Círculo Católico\nRecordatorio: se re-envía convocatoria ${c.id}.\nSector: ${c.sector}${c.sede ? ` · ${c.sede}` : ""}\nTurno: ${fmt(c.inicio)} → ${fmt(c.fin)}\nPor favor ingresá a la app y respondé.\nGracias.`;
+    return (
+      `Suplencias · Círculo Católico\n` +
+      `Recordatorio: guardia disponible.\n` +
+      `Sector: ${lugar()}\n` +
+      `Fecha: ${fmtMsgFecha(c.inicio)}\n` +
+      `Horario: ${fmtMsgHora(c.inicio)} a ${fmtMsgHora(c.fin)}\n` +
+      `Respondé SI o NO a este mensaje.\n` +
+      `Gracias.`
+    );
   }
 
   function reenviarA(medicoId: string) {
@@ -300,7 +344,7 @@ export function DetalleConvocatoria() {
     else alert(`Siguiente activado (ORD #${nextOrd}), pero no tiene teléfono cargado.`);
   }
 
-  const waMsg = c.estado === "CANCELADA" ? msgCancel() : msgUpdate();
+  const waMsg = c.estado === "CANCELADA" ? msgCancel() : msgInvitacion();
 
   return (
     <AppShell>
