@@ -542,6 +542,11 @@ export function DetalleConvocatoria() {
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "flex-start" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
                         <b style={{ fontSize: 13 }}>{medicoName(inv.medicoId)}</b>
+                        {mData?.especialidad && (
+                          <span style={{ fontSize: 12, color: "var(--muted)", fontStyle: "italic" }}>
+                            ({mData.especialidad})
+                          </span>
+                        )}
                         <Chip rgb="100,116,139" label={`#${idx + 1}`} />
                         {invChip(inv.estado)}
                         {isActive && <Chip rgb="22,163,74" label="ACTIVO" />}
