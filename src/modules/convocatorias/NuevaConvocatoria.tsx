@@ -5,6 +5,7 @@ import { AppShell } from "../../ui/AppShell";
 import { minutesFromNow, toLocalDateTimeInputValue } from "../../core/date";
 import { convocatoriaStore } from "./convocatoria.store";
 import { prioAuditStore } from "./prio.audit.store";
+import { computeNuevoScore } from "../admin/scoring";
 import { medicosStore } from "../admin/medicos.store";
 import { sectoresStore } from "../admin/sectores.store";
 import { sedesStore } from "../admin/sedes.store";
@@ -226,6 +227,17 @@ export function NuevaConvocatoria() {
     }
     return map;
   }, [tick]);
+
+  // ── Scoring map ───────────────────────────────────────────────────────
+  const scoringMap = useMemo(() => {
+    const convs = convocatoriaStore.list();
+    const map = new Map<string, number>();
+    for (const m of medicosOrdenados) {
+      const r = computeNuevoScore(m as any, convs);
+      map.set(m.userId, r.total);
+    }
+    return map;
+  }, [medicosOrdenados, tick]);
 
   // ── Sync dest con catálogo ─────────────────────────────────────────────
   useEffect(() => {
@@ -872,6 +884,19 @@ export function NuevaConvocatoria() {
                             border: "1px solid rgba(100,116,139,0.15)", fontWeight: 500,
                           }}>Sin guardias este mes</span>
                         )}
+                        {/* Scoring */}
+                        {(() => {
+                          const pts = scoringMap.get(m.userId);
+                          if (pts === undefined) return null;
+                          const rgb = pts >= 300 ? "109,191,60" : pts >= 150 ? "217,119,6" : "220,38,38";
+                          return (
+                            <span style={{
+                              fontSize: 10.5, padding: "1px 7px", borderRadius: 20, fontWeight: 700,
+                              background: `rgba(${rgb},0.10)`, color: `rgb(${rgb})`,
+                              border: `1px solid rgba(${rgb},0.22)`,
+                            }}>Pts: {Math.round(pts)}</span>
+                          );
+                        })()}
                       </div>
                     </div>
 

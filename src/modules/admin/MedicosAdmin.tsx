@@ -16,6 +16,10 @@ function normalizeTipo(raw: any): MedicoTipo {
   return "SUPLENTE";
 }
 
+function normalizeGremio(raw: any): MedicoGremio {
+  return String(raw || "").trim().toUpperCase() === "SAQ" ? "SAQ" : "SMU";
+}
+
 // prioridad: entero >= 1, o undefined si vacío / inválido
 function normalizePrioridad(raw: any): number | undefined {
   const s = String(raw ?? "").trim();
@@ -177,6 +181,7 @@ export function MedicosAdmin() {
         especialidad: (r.especialidad || r.Especialidad || "").trim() || undefined,
         telefono: (r.telefono || r.tel || r.Telefono || "").trim() || undefined,
         tipo,
+        gremio: normalizeGremio(r.gremio ?? r.Gremio ?? r.GREMIO),
         prioridad,
         activo: String(r.activo ?? r.Activo ?? "").trim()
           ? ["1", "true", "si", "sí", "yes"].includes(String(r.activo ?? r.Activo).trim().toLowerCase())
@@ -425,30 +430,70 @@ export function MedicosAdmin() {
       </div>
 
       <div className="panel half">
-        <h3 style={{ margin: 0, fontSize: 14 }}>Médicos · Importar CSV</h3>
-        <p className="sub" style={{ marginTop: 8 }}>
-          Encabezados esperados: userId, displayName, tipo, prioridad, cedula, funcionario, especialidad, telefono, activo
-        </p>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 4 }}>
+          <h3 style={{ margin: 0, fontSize: 14 }}>Médicos · Importar CSV</h3>
+          <button
+            className="btnGhost"
+            style={{ fontSize: 12, padding: "4px 12px" }}
+            onClick={() => {
+              const header = "userId,displayName,tipo,gremio,prioridad,cedula,funcionario,especialidad,telefono,activo";
+              const example = "F-1001,Dr. Juan García,SUPLENTE,SMU,5,12345678,1001,Medicina de emergencia,+59899123456,true";
+              const blob = new Blob([header + "\n" + example], { type: "text/csv;charset=utf-8;" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url; a.download = "plantilla_medicos.csv"; a.click();
+              URL.revokeObjectURL(url);
+            }}
+          >↓ Descargar plantilla</button>
+        </div>
+
+        {/* Descripción de columnas */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 16px", marginBottom: 12, fontSize: 11.5, color: "var(--muted)", background: "var(--surface-2)", borderRadius: 8, padding: "10px 12px", border: "1px solid var(--border-2)" }}>
+          {([
+            ["userId *", "F-1001 o CI-48206484"],
+            ["displayName *", "Nombre completo del médico"],
+            ["tipo", "TITULAR | SUPLENTE | INDEPENDIENTE"],
+            ["gremio", "SMU (defecto) | SAQ"],
+            ["prioridad", "Número entero ≥ 1 (menor = antes)"],
+            ["cedula", "Número de cédula de identidad"],
+            ["funcionario", "Número de funcionario"],
+            ["especialidad", "Nombre de la especialidad"],
+            ["telefono", "+598… (para WhatsApp)"],
+            ["activo", "true / false (defecto: true)"],
+          ] as [string, string][]).map(([col, desc]) => (
+            <div key={col} style={{ display: "flex", gap: 6 }}>
+              <span style={{ fontFamily: "monospace", fontWeight: 700, color: "var(--text)", minWidth: 90 }}>{col}</span>
+              <span>{desc}</span>
+            </div>
+          ))}
+        </div>
 
         <div className="field">
-          <label className="label">Pegá el CSV acá</label>
+          <label className="label">Pegá el CSV acá (con encabezados)</label>
           <textarea
             className="input"
-            rows={10}
+            rows={8}
             value={csvText}
             onChange={e => setCsvText(e.target.value)}
-            style={{ resize: "vertical" }}
+            style={{ resize: "vertical", fontFamily: "ui-monospace, monospace", fontSize: 12 }}
+            placeholder={"userId,displayName,tipo,gremio,prioridad,cedula,funcionario,especialidad,telefono,activo\nF-1001,Dr. García,SUPLENTE,SMU,5,12345678,1001,,+59899123456,true"}
           />
         </div>
 
-        <button className="btnGhost" onClick={onImportCsv}>Importar</button>
-
-        <div className="pill" style={{ marginTop: 12 }}>
-          Ejemplo:{" "}
-          <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>
-            userId,displayName,tipo,prioridad,cedula,funcionario,especialidad,telefono,activo
-          </span>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button className="btn" onClick={onImportCsv} disabled={!csvText.trim()}>
+            Importar
+          </button>
+          {csvText.trim() && (
+            <button className="btnGhost" style={{ fontSize: 12 }} onClick={() => setCsvText("")}>
+              Limpiar
+            </button>
+          )}
         </div>
+        <p className="sub" style={{ marginTop: 8 }}>
+          * Campos obligatorios. Los demás son opcionales. Las filas sin userId o displayName se omiten.
+          Si el userId ya existe, se actualiza el registro.
+        </p>
       </div>
 
       <div className="panel">

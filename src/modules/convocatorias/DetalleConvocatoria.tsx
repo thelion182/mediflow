@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { authStore } from "../../auth/auth.store";
 import { convocatoriaStore, getMedicosCatalogo } from "./convocatoria.store";
+import { medicosStore } from "../admin/medicos.store";
 import { configStore } from "../config/config.store";
 import { AppShell } from "../../ui/AppShell";
 import type { Canal } from "./convocatoria.types";
@@ -133,8 +134,11 @@ export function DetalleConvocatoria() {
 
   const c = useMemo(() => (id ? convocatoriaStore.get(id) : null), [id, tick]);
   const medicosSnap = useMemo(() => getMedicosCatalogo(), [tick]);
+  const medicosFullSnap = useMemo(() => medicosStore.list(), [tick]);
   const medicoName = (medicoId: string) =>
     medicosSnap.find(m => m.userId === medicoId)?.nombre ?? medicoId;
+  const medicoData = (medicoId: string) =>
+    medicosFullSnap.find(m => m.userId === medicoId);
 
   const [editMode, setEditMode] = useState(false);
   const [form, setForm] = useState(() => ({
@@ -526,6 +530,7 @@ export function DetalleConvocatoria() {
                 const isActive = isSecuencial && idx === activeInvIdx &&
                   (inv.estado === "ENVIADA" || inv.estado === "VISTA");
                 const leftColor = invLeftBorder(inv.estado, isActive);
+                const mData = medicoData(inv.medicoId);
 
                 return (
                   <div key={inv.medicoId} style={{
@@ -541,6 +546,16 @@ export function DetalleConvocatoria() {
                         {invChip(inv.estado)}
                         {isActive && <Chip rgb="22,163,74" label="ACTIVO" />}
                         {inv.canal && inv.estado !== "EN_ESPERA" && <CanalTag canal={inv.canal as Canal} />}
+                        {mData?.funcionario && (
+                          <span style={{ fontSize: 11, color: "var(--muted)", fontVariantNumeric: "tabular-nums" }}>
+                            F: {mData.funcionario}
+                          </span>
+                        )}
+                        {mData?.cedula && (
+                          <span style={{ fontSize: 11, color: "var(--muted)", fontVariantNumeric: "tabular-nums" }}>
+                            CI: {mData.cedula}
+                          </span>
+                        )}
                         {tel
                           ? <Chip rgb="100,116,139" label={tel} />
                           : <Chip rgb="220,38,38" label="Sin teléfono" />
