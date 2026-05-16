@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "../../ui/AppShell";
 import { authStore } from "../../auth/auth.store";
 import { convocatoriaStore } from "../convocatorias/convocatoria.store";
@@ -496,6 +496,14 @@ export function ParteDiario() {
   type FiltroDestaque = { tipo: "GREMIO" | "TIPO" | "ESPECIALIDAD"; valor: string };
   const [filtroD, setFiltroD] = useState<FiltroDestaque | null>(null);
 
+  // ── Animation state ──────────────────────────────────────────────────────
+  const [nowMs, setNowMs]             = useState(() => Date.now());
+  const prevEstadosRef                = useRef<Map<string, string>>(new Map());
+  const [flashedIds, setFlashedIds]   = useState<Map<string, "green" | "red">>(new Map());
+  const [isFiltering, setIsFiltering] = useState(false);
+  const hasMountedRef                 = useRef(false);
+  const filterTimerRef                = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const allMedicos = useMemo(() => medicosStore.list().filter((m: any) => m.activo ?? true), [tick]);
   const medicosById = useMemo(() => {
     const m = new Map<string, string>();
@@ -528,6 +536,41 @@ export function ParteDiario() {
   }
 
   const allConvs = useMemo(() => convocatoriaStore.list(), [tick]);
+
+  // nowMs — actualiza cada minuto para el dot de guardia activa
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Flash cuando cambia el estado de una conv al refrescar
+  useEffect(() => {
+    const prev = prevEstadosRef.current;
+    const newMap   = new Map<string, string>();
+    const newFlash = new Map<string, "green" | "red">();
+    for (const c of allConvs) {
+      newMap.set(c.id, c.estado);
+      const prevEstado = prev.get(c.id);
+      if (prevEstado !== undefined && prevEstado !== c.estado) {
+        newFlash.set(c.id, c.estado === "CUBIERTA" ? "green" : "red");
+      }
+    }
+    prevEstadosRef.current = newMap;
+    if (newFlash.size > 0) {
+      setFlashedIds(newFlash);
+      const t = setTimeout(() => setFlashedIds(new Map()), 900);
+      return () => clearTimeout(t);
+    }
+  }, [allConvs]);
+
+  // Skeleton breve al cambiar filtros o día
+  useEffect(() => {
+    if (!hasMountedRef.current) { hasMountedRef.current = true; return; }
+    setIsFiltering(true);
+    if (filterTimerRef.current) clearTimeout(filterTimerRef.current);
+    filterTimerRef.current = setTimeout(() => setIsFiltering(false), 350);
+    return () => { if (filterTimerRef.current) clearTimeout(filterTimerRef.current); };
+  }, [zona, filtroSede, filtroSector, day]);
 
   const guardiasFijasDelDia = useMemo(() => {
     const dayStart = new Date(day + "T00:00:00");
@@ -976,7 +1019,13 @@ export function ParteDiario() {
 
         {/* ── Gantt ── */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          {!hasCoverage ? (
+          {isFiltering ? (
+            <div style={{ display: "grid", gap: 16 }}>
+              {[110, 150, 100].map((h, i) => (
+                <div key={i} className="mf-skeleton" style={{ height: h }} />
+              ))}
+            </div>
+          ) : !hasCoverage ? (
             <div style={{
               textAlign: "center", padding: "60px 20px",
               background: "var(--surface)", border: "1px solid var(--border)",
@@ -1000,7 +1049,13 @@ export function ParteDiario() {
                   padding: "11px 18px", borderBottom: "1px solid var(--border-2)",
                   background: "var(--surface-2)",
                 }}>
-                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--green)", flexShrink: 0 }} />
+                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--green)", flexShrink: 0,
+                    ...(Object.values(sectors).flat().some((c: any) =>
+                      c.estado === "CUBIERTA" &&
+                      new Date(c.inicio).getTime() <= nowMs &&
+                      new Date(c.fin).getTime() >= nowMs
+                    ) ? { animation: "pulseDot 1.8s ease-in-out infinite" } : {}),
+                  }} />
                   <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text)" }}>{sede}</h2>
                   <span style={{ fontSize: 12, color: "var(--muted)" }}>
                     · {Object.keys(sectors).length} sector{Object.keys(sectors).length !== 1 ? "es" : ""}
@@ -1088,6 +1143,11 @@ export function ParteDiario() {
                                   opacity: filtroD && !isMatch ? 0.15 : 1,
                                   filter: filtroD && !isMatch ? "grayscale(0.7)" : "none",
                                   transition: "opacity 0.22s, filter 0.22s, border 0.15s, box-shadow 0.15s",
+                                  animation: flashedIds.get(c.id) === "green"
+                                    ? "flashRingGreen 0.9s ease forwards"
+                                    : flashedIds.get(c.id) === "red"
+                                    ? "flashRingRed 0.9s ease forwards"
+                                    : undefined,
                                 }}
                               >
                                 <span style={{ fontSize: 11, fontWeight: 600, color: col.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { authStore } from "../auth/auth.store";
 import { usersStore } from "../modules/config/users.store";
@@ -50,7 +50,7 @@ const ROLE_LABEL: Record<Role, string> = {
   ADMIN:       "Administrador",
   COORDINADOR: "Coordinador",
   MEDICO:      "Médico",
-  CONSULTA_PD: "Consulta PD",
+  CONSULTA_PD: "Consulta",
 };
 
 // ── Icons (SVG inline) ──────────────────────────────────────────────────
@@ -82,7 +82,18 @@ function initials(name: string) {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const session  = authStore.getSession()!;
   const navigate = useNavigate();
-  const location = useLocation();
+  const location    = useLocation();
+  const prevPathRef = useRef(location.pathname);
+
+  const prevPath  = prevPathRef.current;
+  const currDepth = location.pathname.split("/").filter(Boolean).length;
+  const prevDepth = prevPath.split("/").filter(Boolean).length;
+  let pageAnim = "pageFadeIn 0.15s ease";
+  if (location.pathname !== prevPath) {
+    if (currDepth > prevDepth)      pageAnim = "slideFromRight 0.20s ease";
+    else if (currDepth < prevDepth) pageAnim = "slideFromLeft 0.20s ease";
+  }
+  useEffect(() => { prevPathRef.current = location.pathname; }, [location.pathname]);
 
   const [showPassForm, setShowPassForm] = useState(false);
   const [passOld,     setPassOld]       = useState("");
@@ -259,7 +270,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* ── Main area ── */}
       <main style={{ marginLeft: "var(--sidebar-w)", flex: 1, minHeight: "100vh", padding: "22px 26px" }}>
-        {children}
+        <div key={location.pathname} style={{ animation: pageAnim }}>
+          {children}
+        </div>
       </main>
     </div>
   );
