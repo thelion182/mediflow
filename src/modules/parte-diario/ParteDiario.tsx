@@ -503,6 +503,8 @@ export function ParteDiario() {
   const [isFiltering, setIsFiltering] = useState(false);
   const hasMountedRef                 = useRef(false);
   const filterTimerRef                = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevDayRef                    = useRef(day);
+  const [dayDir, setDayDir]           = useState<"forward" | "backward" | null>(null);
 
   const allMedicos = useMemo(() => medicosStore.list().filter((m: any) => m.activo ?? true), [tick]);
   const medicosById = useMemo(() => {
@@ -563,14 +565,22 @@ export function ParteDiario() {
     }
   }, [allConvs]);
 
-  // Skeleton breve al cambiar filtros o día
+  // Skeleton breve al cambiar filtros (no en cambio de día, que usa slide)
   useEffect(() => {
     if (!hasMountedRef.current) { hasMountedRef.current = true; return; }
     setIsFiltering(true);
     if (filterTimerRef.current) clearTimeout(filterTimerRef.current);
     filterTimerRef.current = setTimeout(() => setIsFiltering(false), 350);
     return () => { if (filterTimerRef.current) clearTimeout(filterTimerRef.current); };
-  }, [zona, filtroSede, filtroSector, day]);
+  }, [zona, filtroSede, filtroSector]);
+
+  // Dirección del swipe al cambiar día
+  useEffect(() => {
+    const prev = prevDayRef.current;
+    if (prev === day) return;
+    setDayDir(day > prev ? "forward" : "backward");
+    prevDayRef.current = day;
+  }, [day]);
 
   const guardiasFijasDelDia = useMemo(() => {
     const dayStart = new Date(day + "T00:00:00");
@@ -1018,7 +1028,13 @@ export function ParteDiario() {
       {viewMode === "daily" && <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
 
         {/* ── Gantt ── */}
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div key={day} style={{ flex: 1, minWidth: 0,
+          animation: dayDir === "forward"
+            ? "daySlideRight 0.26s ease-out"
+            : dayDir === "backward"
+            ? "daySlideLeft 0.26s ease-out"
+            : undefined,
+        }}>
           {isFiltering ? (
             <div style={{ display: "grid", gap: 16 }}>
               {[110, 150, 100].map((h, i) => (

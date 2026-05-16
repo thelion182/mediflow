@@ -79,6 +79,8 @@ a { color: inherit; text-decoration: none; }
                             100% { box-shadow: none; } }
 @keyframes flashRingRed   { 0%   { box-shadow: 0 0 0 3px rgba(220,38,38,0.60), 0 0 10px rgba(220,38,38,0.25); }
                             100% { box-shadow: none; } }
+@keyframes daySlideRight  { from { opacity: 0.25; transform: translateX(48px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes daySlideLeft   { from { opacity: 0.25; transform: translateX(-48px); } to { opacity: 1; transform: translateX(0); } }
 @keyframes shimmer        { 0%   { background-position: -400px 0; }
                             100% { background-position:  400px 0; } }
 .mf-skeleton {
