@@ -1077,7 +1077,7 @@ export function SuplenciasDashboard() {
 // Botón de borrado para cards (overlay absoluto top-right, sin solapar contenido)
 const deleteOverlayStyle: React.CSSProperties = {
   position: "absolute",
-  top: 8,
+  bottom: 8,
   right: 8,
   zIndex: 10,
   padding: "5px 9px",
