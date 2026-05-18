@@ -90,8 +90,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const prevDepth = prevPath.split("/").filter(Boolean).length;
   let pageAnim = "pageFadeIn 0.15s ease";
   if (location.pathname !== prevPath) {
-    if (currDepth > prevDepth)      pageAnim = "slideFromRight 0.20s ease";
-    else if (currDepth < prevDepth) pageAnim = "slideFromLeft 0.20s ease";
+    if (location.pathname === "/parte-diario") {
+      pageAnim = "pageFadeIn 0.38s ease";
+    } else if (currDepth > prevDepth) {
+      pageAnim = "slideFromRight 0.20s ease";
+    } else if (currDepth < prevDepth) {
+      pageAnim = "slideFromLeft 0.20s ease";
+    }
   }
   useEffect(() => { prevPathRef.current = location.pathname; }, [location.pathname]);
 
