@@ -5,6 +5,7 @@ import { sectoresStore } from "./sectores.store";
 import { especialidadesStore } from "./especialidades.store";
 import type { Medico, MedicoTipo, MedicoGremio, NivelTecnico, NivelPostgrado, NivelRelacionamiento, NivelQuejas } from "./medicos.types";
 import { DoctorAvatar } from "./DoctorAvatar";
+import { newId } from "../../core/id";
 
 function normalizeUserId(input: string) {
   return (input || "").trim();
@@ -54,7 +55,12 @@ export function MedicosAdmin() {
     antiguedadAnios: undefined,
     penalizacionGuardiaFija: 0,
     activo: true,
+    bloqueos: [],
   });
+
+  const [bloqueoInicio, setBloqueoInicio] = useState("");
+  const [bloqueoFin,    setBloqueoFin]    = useState("");
+  const [bloqueoMotivo, setBloqueoMotivo] = useState("");
 
   const sectores       = useMemo(() => sectoresStore.list().filter(s => s.activo ?? true), [tick]);
   const especialidades = useMemo(() => especialidadesStore.listNames(), [tick]);
@@ -127,6 +133,7 @@ export function MedicosAdmin() {
       antiguedadAnios: form.antiguedadAnios ?? undefined,
       penalizacionGuardiaFija: form.penalizacionGuardiaFija ?? 0,
       activo: form.activo ?? true,
+      bloqueos: form.bloqueos ?? [],
     });
 
     setForm({
@@ -144,7 +151,9 @@ export function MedicosAdmin() {
       antiguedadAnios: undefined,
       penalizacionGuardiaFija: 0,
       activo: true,
+      bloqueos: [],
     });
+    setBloqueoInicio(""); setBloqueoFin(""); setBloqueoMotivo("");
 
     refresh();
   }
@@ -214,8 +223,22 @@ export function MedicosAdmin() {
       antiguedadAnios: m.antiguedadAnios,
       penalizacionGuardiaFija: m.penalizacionGuardiaFija ?? 0,
       activo: m.activo ?? true,
+      bloqueos: m.bloqueos ?? [],
     });
+    setBloqueoInicio(""); setBloqueoFin(""); setBloqueoMotivo("");
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function addBloqueo() {
+    if (!bloqueoInicio || !bloqueoFin) return alert("Ingresá inicio y fin del bloqueo.");
+    if (bloqueoFin < bloqueoInicio) return alert("El fin debe ser posterior al inicio.");
+    const b = { id: newId("B"), inicio: bloqueoInicio, fin: bloqueoFin, motivo: bloqueoMotivo.trim() || undefined };
+    setForm(f => ({ ...f, bloqueos: [...(f.bloqueos ?? []), b] }));
+    setBloqueoInicio(""); setBloqueoFin(""); setBloqueoMotivo("");
+  }
+
+  function removeBloqueo(id: string) {
+    setForm(f => ({ ...f, bloqueos: (f.bloqueos ?? []).filter(b => b.id !== id) }));
   }
 
   function onDelete(userId: string) {
@@ -424,6 +447,37 @@ export function MedicosAdmin() {
               />
             </div>
           </div>
+        </div>
+
+        {/* Bloqueos de disponibilidad */}
+        <div style={{ padding: "12px", borderRadius: 10, background: "var(--surface-2)", border: "1px solid var(--border-2)", marginTop: 4 }}>
+          <p style={{ margin: "0 0 10px", fontSize: 12, fontWeight: 700, color: "var(--text)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Bloqueos de disponibilidad</p>
+          {(form.bloqueos ?? []).length === 0 && (
+            <p style={{ fontSize: 12, color: "var(--subtle)", marginBottom: 10 }}>Sin bloqueos registrados.</p>
+          )}
+          {(form.bloqueos ?? []).map(b => (
+            <div key={b.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 8, background: "rgba(220,38,38,0.07)", border: "1px solid rgba(220,38,38,0.18)", marginBottom: 6 }}>
+              <span style={{ fontSize: 12, color: "var(--text)", flex: 1 }}>
+                {b.inicio} → {b.fin}{b.motivo ? ` · ${b.motivo}` : ""}
+              </span>
+              <button onClick={() => removeBloqueo(b.id)} style={{ padding: "2px 8px", borderRadius: 6, border: "1px solid rgba(220,38,38,0.30)", background: "none", cursor: "pointer", fontSize: 11, color: "rgb(185,28,28)" }}>✕</button>
+            </div>
+          ))}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 4 }}>
+            <div className="field" style={{ margin: 0 }}>
+              <label className="label">Desde</label>
+              <input className="input" type="date" value={bloqueoInicio} onChange={e => setBloqueoInicio(e.target.value)} />
+            </div>
+            <div className="field" style={{ margin: 0 }}>
+              <label className="label">Hasta</label>
+              <input className="input" type="date" value={bloqueoFin} onChange={e => setBloqueoFin(e.target.value)} />
+            </div>
+          </div>
+          <div className="field" style={{ margin: "8px 0 0" }}>
+            <label className="label">Motivo (opcional)</label>
+            <input className="input" value={bloqueoMotivo} onChange={e => setBloqueoMotivo(e.target.value)} placeholder="Vacaciones, licencia, etc." />
+          </div>
+          <button className="btnGhost" onClick={addBloqueo} style={{ marginTop: 8, fontSize: 12 }}>+ Agregar bloqueo</button>
         </div>
 
         <button className="btn" onClick={onSave}>Guardar</button>

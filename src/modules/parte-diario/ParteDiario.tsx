@@ -58,6 +58,32 @@ function pctOf(isoStr: string, dayStr: string): number {
   return Math.max(0, Math.min(100, ((t - s) / (e - s)) * 100));
 }
 function fmtHour(h: number) { return `${String(h).padStart(2, "0")}:00`; }
+function getMonthCalendar(dateStr: string): string[][] {
+  const d = new Date(dateStr + "T12:00:00");
+  const year = d.getFullYear();
+  const month = d.getMonth();
+  const firstDay = new Date(year, month, 1);
+  // Start from Monday of the week containing the 1st
+  const startDow = firstDay.getDay(); // 0=Sun
+  const daysBack = startDow === 0 ? 6 : startDow - 1;
+  const start = new Date(firstDay);
+  start.setDate(start.getDate() - daysBack);
+  const weeks: string[][] = [];
+  let cur = new Date(start);
+  for (let w = 0; w < 6; w++) {
+    const week: string[] = [];
+    for (let d = 0; d < 7; d++) {
+      week.push(cur.toISOString().slice(0, 10));
+      cur.setDate(cur.getDate() + 1);
+    }
+    weeks.push(week);
+    if (cur.getMonth() > month && w >= 3) break;
+  }
+  return weeks;
+}
+function sameMonth(dateStr: string, refStr: string): boolean {
+  return dateStr.slice(0, 7) === refStr.slice(0, 7);
+}
 function dChip(active: boolean, rgb: string): React.CSSProperties {
   return {
     padding: "4px 11px", borderRadius: 20, fontSize: 12, fontWeight: active ? 700 : 500,
@@ -477,7 +503,7 @@ export function ParteDiario() {
   const [day, setDay] = useState(todayStr);
   const [tick, setTick] = useState(0);
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"daily" | "weekly">("daily");
+  const [viewMode, setViewMode] = useState<"daily" | "weekly" | "monthly">("daily");
   const [showDistribucion, setShowDistribucion] = useState(false);
 
   // Filtros — persisten por usuario
@@ -728,6 +754,52 @@ export function ParteDiario() {
   const hasCoverage = Object.keys(grouped).length > 0;
   const hourMarks = Array.from({ length: 13 }, (_, i) => i * 2);
 
+  // Monthly calendar data
+  const monthCalendar = useMemo(() => getMonthCalendar(day), [day]);
+  const monthCovMap = useMemo(() => {
+    const map = new Map<string, { total: number; cubiertas: number }>();
+    for (const c of allConvs) {
+      if (c.estado === "CANCELADA") continue;
+      const ds = c.inicio.slice(0, 10);
+      const prev = map.get(ds) ?? { total: 0, cubiertas: 0 };
+      map.set(ds, {
+        total: prev.total + 1,
+        cubiertas: prev.cubiertas + (c.estado === "CUBIERTA" ? 1 : 0),
+      });
+    }
+    return map;
+  }, [allConvs]);
+
+  // CSV export for the current day's Gantt data
+  function exportCsv() {
+    const rows: string[][] = [["Sector","Sede","Inicio","Fin","Médico","Estado"]];
+    Object.entries(grouped).forEach(([sede, sectors]) => {
+      Object.entries(sectors).forEach(([sector, convs]) => {
+        (convs as any[]).forEach(c => {
+          if (c._esGuardiaFija) {
+            const asig = (c.asignaciones ?? [])[0];
+            rows.push([sector, sede, fmtTime(c.inicio), fmtTime(c.fin), asig ? medicoName(asig.medicoId) : "", "GUARDIA FIJA"]);
+          } else {
+            const asigs = (c.asignaciones ?? []).filter((a: any) => a.estado === "CONFIRMADA" || a.estado === "CUMPLIDA");
+            if (asigs.length === 0) {
+              rows.push([sector, sede, fmtTime(c.inicio), fmtTime(c.fin), "(Sin cubrir)", c.estado]);
+            } else {
+              asigs.forEach((a: any) => {
+                rows.push([sector, sede, fmtTime(c.inicio), fmtTime(c.fin), medicoName(a.medicoId), c.estado]);
+              });
+            }
+          }
+        });
+      });
+    });
+    const csv = rows.map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `parte-diario-${day}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  }
+
   const especialidadesHoy = useMemo(() => {
     const set = new Set<string>();
     Object.values(grouped).flatMap(s => Object.values(s).flat()).forEach((c: any) => {
@@ -765,9 +837,10 @@ export function ParteDiario() {
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           {/* Toggle vista */}
           <div style={{ display: "flex", borderRadius: 8, border: "1px solid var(--border)", overflow: "hidden" }}>
-            {([ ["daily", "Diaria"], ["weekly", "Semanal"] ] as const).map(([mode, label]) => (
+            {([ ["daily", "Diaria"], ["weekly", "Semanal"], ["monthly", "Mensual"] ] as const).map(([mode, label], idx, arr) => (
               <button key={mode} onClick={() => setViewMode(mode)} style={{
-                padding: "7px 14px", border: "none", borderRight: mode === "daily" ? "1px solid var(--border)" : "none",
+                padding: "7px 14px", border: "none",
+                borderRight: idx < arr.length - 1 ? "1px solid var(--border)" : "none",
                 background: viewMode === mode ? "var(--blue-tint-2)" : "var(--surface)",
                 color: viewMode === mode ? "var(--blue)" : "var(--muted)",
                 fontSize: 13, fontWeight: viewMode === mode ? 700 : 500, cursor: "pointer",
@@ -800,6 +873,12 @@ export function ParteDiario() {
               padding: "7px 14px", borderRadius: 8, border: "1px solid var(--border)",
               background: "var(--surface)", fontSize: 13, cursor: "pointer", color: "var(--muted)", fontWeight: 500,
             }}>Distribución</button>
+          )}
+          {viewMode === "daily" && hasCoverage && (
+            <button onClick={exportCsv} title="Exportar CSV del día" style={{
+              padding: "7px 12px", borderRadius: 8, border: "1px solid var(--border)",
+              background: "var(--surface)", fontSize: 12.5, cursor: "pointer", color: "var(--muted)", fontWeight: 500,
+            }}>↓ CSV</button>
           )}
           <button onClick={() => setTick(t => t + 1)} title="Recargar datos" style={{
             padding: "7px 12px", borderRadius: 8, border: "1px solid var(--border)",
@@ -1022,6 +1101,80 @@ export function ParteDiario() {
           currentDay={day}
           onSelectDay={d => { setDay(d); setViewMode("daily"); }}
         />
+      )}
+
+      {/* ── Vista mensual ── */}
+      {viewMode === "monthly" && (
+        <div style={{
+          background: "var(--surface)", border: "1px solid var(--border)",
+          borderRadius: 16, overflow: "hidden", boxShadow: "var(--shadow-sm)",
+        }}>
+          {/* Month navigation */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", borderBottom: "1px solid var(--border-2)", background: "var(--surface-2)" }}>
+            <button onClick={() => { const d = new Date(day + "T12:00:00"); d.setMonth(d.getMonth() - 1); setDay(d.toISOString().slice(0, 10)); }} style={{ padding: "5px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", cursor: "pointer", fontSize: 13 }}>←</button>
+            <span style={{ fontWeight: 700, fontSize: 15, textTransform: "capitalize" }}>
+              {new Date(day + "T12:00:00").toLocaleDateString("es-UY", { month: "long", year: "numeric" })}
+            </span>
+            <button onClick={() => { const d = new Date(day + "T12:00:00"); d.setMonth(d.getMonth() + 1); setDay(d.toISOString().slice(0, 10)); }} style={{ padding: "5px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", cursor: "pointer", fontSize: 13 }}>→</button>
+          </div>
+          {/* Day-of-week headers */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderBottom: "1px solid var(--border-2)" }}>
+            {["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"].map(d => (
+              <div key={d} style={{ padding: "8px 0", textAlign: "center", fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{d}</div>
+            ))}
+          </div>
+          {/* Calendar grid */}
+          {monthCalendar.map((week, wi) => (
+            <div key={wi} style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderBottom: wi < monthCalendar.length - 1 ? "1px solid var(--border-2)" : "none" }}>
+              {week.map(ds => {
+                const inMonth = sameMonth(ds, day);
+                const isToday = ds === todayStr();
+                const isSelected = ds === day;
+                const cov = monthCovMap.get(ds);
+                const covPct = cov ? Math.round((cov.cubiertas / cov.total) * 100) : null;
+                const rgb = covPct === null ? null : covPct >= 80 ? "22,163,74" : covPct >= 40 ? "217,119,6" : "220,38,38";
+                return (
+                  <div
+                    key={ds}
+                    onClick={() => { setDay(ds); setViewMode("daily"); }}
+                    style={{
+                      minHeight: 70, padding: "8px 10px", cursor: "pointer",
+                      borderRight: "1px solid var(--border-2)",
+                      background: isSelected ? "rgba(21,101,192,0.08)" : isToday ? "rgba(21,101,192,0.04)" : "transparent",
+                      opacity: inMonth ? 1 : 0.35,
+                      transition: "background 0.12s",
+                    }}
+                    onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = "var(--surface-2)"; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = isSelected ? "rgba(21,101,192,0.08)" : isToday ? "rgba(21,101,192,0.04)" : "transparent"; }}
+                  >
+                    <div style={{
+                      fontSize: 13, fontWeight: isToday ? 800 : 500,
+                      color: isToday ? "var(--blue)" : isSelected ? "var(--blue)" : inMonth ? "var(--text)" : "var(--subtle)",
+                      marginBottom: 4,
+                    }}>
+                      {parseInt(ds.slice(8), 10)}
+                    </div>
+                    {cov && rgb && (
+                      <>
+                        <div style={{ height: 4, borderRadius: 2, background: "var(--border-2)", marginBottom: 4 }}>
+                          <div style={{ width: `${covPct}%`, height: "100%", borderRadius: 2, background: `rgb(${rgb})` }} />
+                        </div>
+                        <div style={{ fontSize: 10, color: `rgb(${rgb})`, fontWeight: 600 }}>
+                          {cov.cubiertas}/{cov.total}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+          <div style={{ padding: "8px 18px", display: "flex", gap: 14, fontSize: 11, color: "var(--muted)" }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: "rgb(22,163,74)", display: "inline-block" }} /> ≥80% cubierto</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: "rgb(217,119,6)", display: "inline-block" }} /> 40–79%</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: "rgb(220,38,38)", display: "inline-block" }} /> &lt;40%</span>
+          </div>
+        </div>
       )}
 
       {/* ── Main area: Gantt + Edit panel ── */}

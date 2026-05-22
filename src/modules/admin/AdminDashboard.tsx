@@ -5,11 +5,14 @@ import { SectoresAdmin } from "./SectoresAdmin";
 import { ScoringAdmin } from "./ScoringAdmin";
 import { GuardiasFijasAdmin } from "./GuardiasFijasAdmin";
 import { EspecialidadesAdmin } from "./EspecialidadesAdmin";
+import { AuditoriaAdmin } from "./AuditoriaAdmin";
 import { AppShell } from "../../ui/AppShell";
+import { authStore } from "../../auth/auth.store";
 
-type Tab = "MEDICOS" | "SEDES" | "SECTORES" | "SCORING" | "GUARDIAS_FIJAS" | "ESPECIALIDADES";
+type Tab = "MEDICOS" | "SEDES" | "SECTORES" | "SCORING" | "GUARDIAS_FIJAS" | "ESPECIALIDADES" | "AUDITORIA";
 
 export function AdminDashboard() {
+  const session = authStore.getSession()!;
   const [tab, setTab] = useState<Tab>("MEDICOS");
 
   const subtitle = useMemo(() => {
@@ -24,6 +27,7 @@ export function AdminDashboard() {
     if (tab === "SECTORES") return "Catálogo de Sectores. Se usa para clasificar y filtrar convocatorias.";
     if (tab === "GUARDIAS_FIJAS") return "Médicos con turno fijo recurrente. Se proyectan automáticamente en el Parte Diario según el día de la semana.";
     if (tab === "ESPECIALIDADES") return "Catálogo de especialidades médicas. Administrá la lista y el emoji de cada una. Se usa como desplegable al crear médicos y al crear guardias fijas.";
+    if (tab === "AUDITORIA") return "Registro cronológico de eventos clave del sistema: convocatorias, asignaciones, cancelaciones y devoluciones.";
     return "Scores calculados automáticamente a partir del historial de convocatorias. Configurá los pesos en Configuración → Scoring.";
   }, [tab]);
 
@@ -44,6 +48,9 @@ export function AdminDashboard() {
           { key: "GUARDIAS_FIJAS",  label: "Guardias Fijas"  },
           { key: "ESPECIALIDADES", label: "Especialidades"  },
           { key: "SCORING",        label: "Scoring"         },
+          ...(session.role === "SUPER_ADMIN" || session.role === "ADMIN"
+            ? [{ key: "AUDITORIA" as Tab, label: "Auditoría" }]
+            : []),
         ] as { key: Tab; label: string }[]).map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
             padding: "8px 16px",
@@ -67,6 +74,7 @@ export function AdminDashboard() {
       {tab === "GUARDIAS_FIJAS"  ? <GuardiasFijasAdmin />   : null}
       {tab === "ESPECIALIDADES" ? <EspecialidadesAdmin /> : null}
       {tab === "SCORING"        ? <ScoringAdmin />         : null}
+      {tab === "AUDITORIA"      ? <AuditoriaAdmin />       : null}
     </AppShell>
   );
 }

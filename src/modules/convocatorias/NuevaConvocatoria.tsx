@@ -263,6 +263,19 @@ export function NuevaConvocatoria() {
     return sectoresActivos.find((s: any) => s.nombre === sectorSel)?.id as string | undefined;
   }, [sectorSel, sectoresActivos]);
 
+  // Doctors blocked on the selected date
+  const blockedIds = useMemo(() => {
+    if (!inicio) return new Set<string>();
+    const dayStr = inicio.slice(0, 10); // YYYY-MM-DD
+    const blocked = new Set<string>();
+    for (const m of medicosOrdenados) {
+      for (const b of (m as any).bloqueos ?? []) {
+        if (dayStr >= b.inicio && dayStr <= b.fin) { blocked.add((m as any).userId); break; }
+      }
+    }
+    return blocked;
+  }, [medicosOrdenados, inicio]);
+
   const medicosVisibles = useMemo(() => {
     let list = medicosOrdenados;
     if (tipoSel !== "TODOS")    list = list.filter((m: any) => (m.tipo ?? "SUPLENTE") === tipoSel);
@@ -824,26 +837,41 @@ export function NuevaConvocatoria() {
               {medicosVisibles.length === 0 && (
                 <p style={{ fontSize: 13, color: "var(--muted)", padding: "12px 0" }}>Sin médicos para los filtros seleccionados.</p>
               )}
+              {blockedIds.size > 0 && (
+                <div style={{
+                  padding: "7px 12px", borderRadius: 8, marginBottom: 8,
+                  background: "rgba(220,38,38,0.07)", border: "1px solid rgba(220,38,38,0.20)",
+                  fontSize: 12, color: "rgb(185,28,28)", lineHeight: 1.4,
+                }}>
+                  🚫 {blockedIds.size} médico{blockedIds.size !== 1 ? "s" : ""} con bloqueo en la fecha seleccionada.
+                </div>
+              )}
               {medicosVisibles.map((m: any) => {
                 const checked   = !!dest[m.userId];
                 const rgb       = TIPO_RGB[m.tipo as MedicoTipo] ?? "100,116,139";
                 const ov        = prioOverride[m.userId];
                 const eff       = prioEff(m.userId, m.prioridad);
                 const actividad = medicosActividad.get(m.userId);
+                const isBlocked = blockedIds.has(m.userId);
 
                 return (
                   <div key={m.userId} style={{
                     display: "flex", alignItems: "center", gap: 10, padding: "10px 12px",
-                    borderRadius: 10, cursor: "pointer",
-                    border: `1px solid ${checked ? `rgba(${rgb},0.35)` : "var(--border-2)"}`,
-                    background: checked ? `rgba(${rgb},0.06)` : "var(--surface-2)",
-                    borderLeft: `3px solid ${checked ? `rgb(${rgb})` : "transparent"}`,
+                    borderRadius: 10, cursor: isBlocked ? "default" : "pointer",
+                    border: `1px solid ${isBlocked ? "rgba(220,38,38,0.25)" : checked ? `rgba(${rgb},0.35)` : "var(--border-2)"}`,
+                    background: isBlocked ? "rgba(220,38,38,0.04)" : checked ? `rgba(${rgb},0.06)` : "var(--surface-2)",
+                    borderLeft: `3px solid ${isBlocked ? "rgba(220,38,38,0.50)" : checked ? `rgb(${rgb})` : "transparent"}`,
+                    opacity: isBlocked ? 0.7 : 1,
                     transition: "all 0.12s",
-                  }} onClick={() => toggle(m.userId)}>
-                    {/* Checkbox */}
-                    <input type="checkbox" checked={checked} onChange={() => toggle(m.userId)}
-                      onClick={e => e.stopPropagation()}
-                      style={{ width: 16, height: 16, flexShrink: 0, cursor: "pointer" }} />
+                  }} onClick={() => !isBlocked && toggle(m.userId)}>
+                    {/* Checkbox / blocked */}
+                    {isBlocked ? (
+                      <span title="Médico con bloqueo en esta fecha" style={{ fontSize: 14, flexShrink: 0 }}>🚫</span>
+                    ) : (
+                      <input type="checkbox" checked={checked} onChange={() => toggle(m.userId)}
+                        onClick={e => e.stopPropagation()}
+                        style={{ width: 16, height: 16, flexShrink: 0, cursor: "pointer" }} />
+                    )}
 
                     {/* Info */}
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -860,6 +888,9 @@ export function NuevaConvocatoria() {
                         )}
                         {m.especialidad && (
                           <span style={{ fontSize: 11, color: "var(--subtle)", fontStyle: "italic" }}>{m.especialidad}</span>
+                        )}
+                        {isBlocked && (
+                          <span style={{ padding: "1px 7px", borderRadius: 20, fontSize: 10.5, fontWeight: 700, background: "rgba(220,38,38,0.10)", color: "rgb(185,28,28)", border: "1px solid rgba(220,38,38,0.25)" }}>Bloqueado</span>
                         )}
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3, flexWrap: "wrap" }}>

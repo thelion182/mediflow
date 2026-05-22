@@ -11,6 +11,7 @@ import { AdminDashboard } from "../modules/admin/AdminDashboard";
 import { MedicoHome } from "../modules/medico/MedicoHome";
 import { ParteDiario } from "../modules/parte-diario/ParteDiario";
 import { ConfigPage } from "../modules/config/ConfigPage";
+import { KpiDashboard } from "../modules/dashboard/KpiDashboard";
 
 function auth(role: "coord" | "admin" | "medico", element: React.ReactElement) {
   const guard =
@@ -28,6 +29,7 @@ export const router = createBrowserRouter([
   { path: "/dashboard/nueva",            element: auth("coord", <NuevaConvocatoria />)   },
   { path: "/dashboard/c/:id",            element: auth("coord", <DetalleConvocatoria />) },
   { path: "/dashboard/reportes/horas",   element: auth("coord", <ReporteHoras />)        },
+  { path: "/dashboard/kpis",             element: auth("admin", <KpiDashboard />)          },
   { path: "/parte-diario",               element: <RequireAuth><RequireRole roles={["COORDINADOR","ADMIN","SUPER_ADMIN","MEDICO","CONSULTA_PD"]}><ParteDiario /></RequireRole></RequireAuth> },
   { path: "/admin",                      element: auth("coord", <AdminDashboard />)       },
   { path: "/config",                     element: auth("admin", <ConfigPage />)            },

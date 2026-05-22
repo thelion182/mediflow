@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { authStore } from "../auth/auth.store";
 import { usersStore } from "../modules/config/users.store";
+import { convocatoriaStore } from "../modules/convocatorias/convocatoria.store";
+import { notificationsStore } from "../modules/notifications/notifications.store";
 import type { Role } from "../auth/auth.types";
 import lockupPng from "../assets/branding/mediflow-lockup.png";
 
@@ -16,17 +18,19 @@ type NavItem = {
 
 const NAV: Record<Role, NavItem[]> = {
   SUPER_ADMIN: [
-    { label: "Inicio",         path: "/dashboard",                  rgb: "21,101,192",  exact: true },
+    { label: "Inicio",            path: "/dashboard",                  rgb: "21,101,192",  exact: true },
     { label: "Parte Diario",      path: "/parte-diario",               rgb: "109,191,60"                },
     { label: "Nueva Convocatoria",path: "/dashboard/nueva",            rgb: "21,101,192",  dividerBefore: true },
     { label: "Reportes",          path: "/dashboard/reportes/horas",   rgb: "217,119,6"                 },
+    { label: "KPIs",              path: "/dashboard/kpis",             rgb: "109,191,60"                },
     { label: "Administración",    path: "/admin",                      rgb: "38,166,154",  dividerBefore: true },
     { label: "Configuración",     path: "/config",                     rgb: "100,116,139"               },
   ],
   ADMIN: [
-    { label: "Inicio",         path: "/dashboard",                  rgb: "21,101,192",  exact: true },
+    { label: "Inicio",            path: "/dashboard",                  rgb: "21,101,192",  exact: true },
     { label: "Parte Diario",      path: "/parte-diario",               rgb: "109,191,60"               },
     { label: "Reportes",          path: "/dashboard/reportes/horas",   rgb: "217,119,6",   dividerBefore: true },
+    { label: "KPIs",              path: "/dashboard/kpis",             rgb: "109,191,60"                },
     { label: "Administración",    path: "/admin",                      rgb: "38,166,154",  dividerBefore: true },
   ],
   COORDINADOR: [
@@ -95,6 +99,93 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
   useEffect(() => { prevPathRef.current = location.pathname; }, [location.pathname]);
 
+  // ── Notification polling ──────────────────────────────────────────────
+  const [notifs, setNotifs]       = useState(() => notificationsStore.list());
+  const [showNotifs, setShowNotifs] = useState(false);
+  const prevConvsRef              = useRef<Map<string, string>>(new Map());
+  const unread                    = notifs.filter(n => !n.read).length;
+
+  useEffect(() => {
+    const unsub = notificationsStore.subscribe(() => setNotifs([...notificationsStore.list()]));
+    return unsub;
+  }, []);
+
+  // Poll every 30s — detect convocatoria state changes and generate notifications
+  useEffect(() => {
+    function poll() {
+      const convs = convocatoriaStore.list();
+      const role  = session.role;
+
+      for (const c of convs) {
+        const prevKey = prevConvsRef.current.get(c.id);
+        const currKey = c.estado + "|" + (c.asignaciones ?? []).map(a => `${a.medicoId}:${a.estado}`).join(",");
+
+        if (prevKey === undefined) {
+          prevConvsRef.current.set(c.id, currKey);
+          continue;
+        }
+        if (prevKey === currKey) continue;
+
+        // Detect changes
+        if (role === "MEDICO") {
+          // Doctor: notify when a new ENVIADA inv arrives for them
+          for (const inv of c.invitaciones ?? []) {
+            if (inv.medicoId !== session.userId) continue;
+            if (inv.estado === "ENVIADA") {
+              const prevInvKey = prevKey.split("|").find(k => k.startsWith(session.userId));
+              if (!prevInvKey) {
+                notificationsStore.add({
+                  type: "NUEVA_CONV",
+                  title: "Nueva convocatoria",
+                  body: `Sector ${c.sector}${c.sede ? " · " + c.sede : ""} · ${new Date(c.inicio).toLocaleDateString("es-UY")}`,
+                  convId: c.id,
+                });
+              }
+            }
+          }
+        } else {
+          // Coordinator/admin: notify on accept/reject
+          for (const a of c.asignaciones ?? []) {
+            const prevMentionedAcepto = prevKey.includes(`${a.medicoId}:CONFIRMADA`);
+            if (!prevMentionedAcepto && a.estado === "CONFIRMADA") {
+              notificationsStore.add({
+                type: "CONV_ACEPTADA",
+                title: "Guardia aceptada",
+                body: `${a.medicoId} confirmó ${c.sector}${c.sede ? " · " + c.sede : ""}`,
+                convId: c.id,
+              });
+            }
+            if (!prevKey.includes(`${a.medicoId}:DEVOLUCION_PENDIENTE`) && a.estado === "DEVOLUCION_PENDIENTE") {
+              notificationsStore.add({
+                type: "DEVOLUCION_SOLICITADA",
+                title: "Devolución solicitada",
+                body: `${a.medicoId} solicitó devolver ${c.sector}`,
+                convId: c.id,
+              });
+            }
+          }
+          // Check for rejections via invitations
+          for (const inv of c.invitaciones ?? []) {
+            const wasNotRechazo = !prevKey.includes(`${inv.medicoId}:RECHAZO`);
+            if (wasNotRechazo && inv.estado === "RECHAZO") {
+              notificationsStore.add({
+                type: "CONV_RECHAZADA",
+                title: "Guardia rechazada",
+                body: `${inv.medicoId} rechazó ${c.sector}`,
+                convId: c.id,
+              });
+            }
+          }
+        }
+
+        prevConvsRef.current.set(c.id, currKey);
+      }
+    }
+
+    const id = setInterval(poll, 30_000);
+    return () => clearInterval(id);
+  }, [session.userId, session.role]);
+
   const [showPassForm, setShowPassForm] = useState(false);
   const [passOld,     setPassOld]       = useState("");
   const [passNew,     setPassNew]       = useState("");
@@ -160,6 +251,74 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </React.Fragment>
             );
           })}
+        </div>
+
+        {/* Notification bell */}
+        <div style={{ padding: "6px 8px", borderTop: "1px solid var(--border-2)", position: "relative" }}>
+          <button
+            onClick={() => setShowNotifs(v => !v)}
+            style={{
+              display: "flex", alignItems: "center", gap: 8, width: "100%",
+              padding: "8px 10px", borderRadius: 9, border: "none",
+              background: showNotifs ? "var(--blue-tint)" : "transparent",
+              cursor: "pointer", fontSize: 13, color: "var(--muted)",
+              position: "relative", transition: "background 0.12s",
+            }}
+          >
+            <span style={{ fontSize: 16 }}>🔔</span>
+            <span>Notificaciones</span>
+            {unread > 0 && (
+              <span style={{
+                marginLeft: "auto", minWidth: 20, height: 20, borderRadius: 10,
+                background: "var(--danger)", color: "#fff",
+                fontSize: 10.5, fontWeight: 800, display: "grid", placeItems: "center", padding: "0 5px",
+              }}>{unread > 9 ? "9+" : unread}</span>
+            )}
+          </button>
+
+          {showNotifs && (
+            <div style={{
+              position: "fixed", left: "calc(var(--sidebar-w) + 8px)", bottom: 80, width: 320,
+              background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14,
+              boxShadow: "var(--shadow)", zIndex: 200, maxHeight: 420, overflow: "hidden",
+              display: "flex", flexDirection: "column",
+            }}>
+              <div style={{ padding: "12px 14px 8px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--border-2)" }}>
+                <span style={{ fontWeight: 700, fontSize: 13.5 }}>Notificaciones</span>
+                {notifs.length > 0 && (
+                  <button onClick={() => notificationsStore.markAllRead()} style={{
+                    fontSize: 11, padding: "3px 10px", borderRadius: 8, border: "1px solid var(--border)",
+                    background: "var(--surface-2)", cursor: "pointer", color: "var(--muted)",
+                  }}>Marcar todas leídas</button>
+                )}
+              </div>
+              <div style={{ overflowY: "auto", flex: 1 }}>
+                {notifs.length === 0 && (
+                  <p style={{ padding: "20px 14px", fontSize: 13, color: "var(--subtle)", margin: 0 }}>Sin notificaciones.</p>
+                )}
+                {notifs.map(n => (
+                  <div key={n.id} onClick={() => { notificationsStore.markRead(n.id); if (n.convId) { setShowNotifs(false); navigate(`/dashboard/c/${n.convId}`); } }} style={{
+                    padding: "10px 14px", borderBottom: "1px solid var(--border-2)", cursor: n.convId ? "pointer" : "default",
+                    background: n.read ? "transparent" : "rgba(21,101,192,0.04)",
+                    display: "flex", gap: 10, alignItems: "flex-start",
+                    transition: "background 0.12s",
+                  }}>
+                    <div style={{ fontSize: 18, flexShrink: 0 }}>
+                      {n.type === "CONV_ACEPTADA" ? "✅" : n.type === "CONV_RECHAZADA" ? "❌" : n.type === "DEVOLUCION_SOLICITADA" ? "↩" : "🔔"}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: n.read ? 500 : 700, color: "var(--text)" }}>{n.title}</div>
+                      <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2, lineHeight: 1.4 }}>{n.body}</div>
+                      <div style={{ fontSize: 10.5, color: "var(--subtle)", marginTop: 3 }}>
+                        {new Date(n.timestamp).toLocaleTimeString("es-UY", { hour: "2-digit", minute: "2-digit" })}
+                      </div>
+                    </div>
+                    {!n.read && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--blue)", flexShrink: 0, marginTop: 4 }} />}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer: user + logout */}

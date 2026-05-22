@@ -33,4 +33,11 @@ export type Medico = {
   penalizacionGuardiaFija?: number; // pts que se restan del score si no confirma guardia fija
 
   activo?: boolean;
+
+  bloqueos?: Array<{
+    id: string;
+    inicio: string;   // ISO date string (date part only: YYYY-MM-DD)
+    fin: string;      // ISO date string (date part only: YYYY-MM-DD)
+    motivo?: string;
+  }>;
 };

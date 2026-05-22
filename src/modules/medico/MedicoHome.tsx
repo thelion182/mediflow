@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { authStore } from "../../auth/auth.store";
 import { convocatoriaStore } from "../convocatorias/convocatoria.store";
+import { medicosStore } from "../admin/medicos.store";
 import { configStore } from "../config/config.store";
 import { AppShell } from "../../ui/AppShell";
+import { newId } from "../../core/id";
 
 type InvEstado = "EN_ESPERA" | "ENVIADA" | "VISTA" | "ACEPTO" | "RECHAZO" | "VENCIDA" | "SIN_RESPUESTA" | "CUBIERTA_X_OTRO";
 
@@ -427,6 +429,9 @@ export function MedicoHome() {
 
         </div>
 
+        {/* Disponibilidad */}
+        <BloqueosSelf userId={session.userId} tick={tick} onRefresh={() => setTick(t => t + 1)} />
+
         {/* Nota */}
         <div style={{
           marginTop: 28, padding: "12px 16px", borderRadius: 10,
@@ -438,5 +443,98 @@ export function MedicoHome() {
         </div>
       </div>
     </AppShell>
+  );
+}
+
+// ── BloqueosSelf: manage own availability blocks ──────────────────────────
+function BloqueosSelf({ userId, tick, onRefresh }: { userId: string; tick: number; onRefresh: () => void }) {
+  const medico = useMemo(() => medicosStore.list().find(m => m.userId === userId), [tick]);
+  const bloqueos = medico?.bloqueos ?? [];
+
+  const [inicio,  setInicio]  = useState("");
+  const [fin,     setFin]     = useState("");
+  const [motivo,  setMotivo]  = useState("");
+
+  function addBloqueo() {
+    if (!inicio || !fin) return alert("Ingresá fechas de inicio y fin.");
+    if (fin < inicio) return alert("El fin debe ser igual o posterior al inicio.");
+    if (!medico) return;
+    const b = { id: newId("B"), inicio, fin, motivo: motivo.trim() || undefined };
+    medicosStore.upsert({ ...medico, bloqueos: [...bloqueos, b] });
+    setInicio(""); setFin(""); setMotivo("");
+    onRefresh();
+  }
+
+  function removeBloqueo(id: string) {
+    if (!medico) return;
+    medicosStore.upsert({ ...medico, bloqueos: bloqueos.filter(b => b.id !== id) });
+    onRefresh();
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const vigentes = bloqueos.filter(b => b.fin >= today);
+  const pasados  = bloqueos.filter(b => b.fin < today);
+
+  return (
+    <div style={{ marginTop: 28, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, padding: "18px 20px", boxShadow: "var(--shadow-sm)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+        <div style={{ width: 8, height: 8, borderRadius: "50%", background: "rgb(220,38,38)" }} />
+        <span style={{ fontWeight: 700, fontSize: 14, color: "var(--text)" }}>Mi disponibilidad</span>
+        {vigentes.length > 0 && (
+          <span style={{ padding: "1px 8px", borderRadius: 20, fontSize: 12, fontWeight: 700, background: "rgba(220,38,38,0.10)", color: "rgb(185,28,28)" }}>
+            {vigentes.length} bloqueo{vigentes.length !== 1 ? "s" : ""} vigente{vigentes.length !== 1 ? "s" : ""}
+          </span>
+        )}
+      </div>
+
+      {vigentes.length > 0 && (
+        <div style={{ display: "grid", gap: 6, marginBottom: 14 }}>
+          {vigentes.map(b => (
+            <div key={b.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderRadius: 9, background: "rgba(220,38,38,0.06)", border: "1px solid rgba(220,38,38,0.20)" }}>
+              <span style={{ fontSize: 13, flex: 1 }}>
+                🚫 <b>{b.inicio}</b> → <b>{b.fin}</b>{b.motivo ? ` · ${b.motivo}` : ""}
+              </span>
+              <button onClick={() => removeBloqueo(b.id)} style={{ padding: "3px 10px", borderRadius: 7, border: "1px solid rgba(220,38,38,0.30)", background: "none", cursor: "pointer", fontSize: 12, color: "rgb(185,28,28)" }}>Quitar</button>
+            </div>
+          ))}
+        </div>
+      )}
+      {vigentes.length === 0 && (
+        <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 12 }}>Sin bloqueos vigentes. Aparecerás disponible en todas las convocatorias.</p>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <div>
+          <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "var(--muted)", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.04em" }}>Desde</label>
+          <input type="date" value={inicio} min={today} onChange={e => setInicio(e.target.value)} style={{ width: "100%", boxSizing: "border-box", padding: "9px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", fontSize: 13, fontFamily: "inherit" }} />
+        </div>
+        <div>
+          <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "var(--muted)", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.04em" }}>Hasta</label>
+          <input type="date" value={fin} min={inicio || today} onChange={e => setFin(e.target.value)} style={{ width: "100%", boxSizing: "border-box", padding: "9px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", fontSize: 13, fontFamily: "inherit" }} />
+        </div>
+        <div style={{ gridColumn: "1 / -1" }}>
+          <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: "var(--muted)", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.04em" }}>Motivo (opcional)</label>
+          <input value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Vacaciones, estudio, licencia…" style={{ width: "100%", boxSizing: "border-box", padding: "9px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", fontSize: 13, fontFamily: "inherit" }} />
+        </div>
+      </div>
+      <button onClick={addBloqueo} disabled={!inicio || !fin} style={{
+        marginTop: 10, padding: "9px 20px", borderRadius: 9, border: "none", cursor: !inicio || !fin ? "default" : "pointer",
+        background: !inicio || !fin ? "var(--border)" : "rgba(220,38,38,0.85)", color: "#fff",
+        fontWeight: 700, fontSize: 13, transition: "background 0.12s",
+      }}>Agregar bloqueo</button>
+
+      {pasados.length > 0 && (
+        <details style={{ marginTop: 14 }}>
+          <summary style={{ fontSize: 12, color: "var(--subtle)", cursor: "pointer" }}>{pasados.length} bloqueo{pasados.length !== 1 ? "s" : ""} pasado{pasados.length !== 1 ? "s" : ""}</summary>
+          <div style={{ display: "grid", gap: 4, marginTop: 8 }}>
+            {pasados.map(b => (
+              <div key={b.id} style={{ fontSize: 12, color: "var(--subtle)", padding: "4px 8px", borderRadius: 6, background: "var(--surface-2)" }}>
+                {b.inicio} → {b.fin}{b.motivo ? ` · ${b.motivo}` : ""}
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+    </div>
   );
 }

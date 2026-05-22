@@ -3,6 +3,7 @@ import { newId } from "../../core/id";
 import { nowIso } from "../../core/date";
 import { hoursBetween } from "../../core/hours";
 import { medicosStore } from "../admin/medicos.store";
+import { auditStore } from "../admin/audit.store";
 import type { Canal, Convocatoria, ConvocatoriaEstado, Invitacion, Asignacion } from "./convocatoria.types";
 
 const KEY = "mediflow.convocatorias.v1";
@@ -394,6 +395,16 @@ export const convocatoriaStore = {
     };
 
     storage.set(KEY, [c, ...all]);
+
+    auditStore.add({
+      timestamp:  nowIso(),
+      actorId:    input.createdBy,
+      actorName:  medicosStore.list().find(m => m.userId === input.createdBy)?.displayName ?? input.createdBy,
+      evento:     "CONV_CREADA",
+      entidadId:  c.id,
+      datos:      { sector: c.sector, sede: c.sede ?? "", modo: c.modoEnvio, cupos: c.cupos, destinatarios: input.destinatarios.length },
+    });
+
     return c;
   },
 
@@ -469,6 +480,14 @@ export const convocatoriaStore = {
       c.estado = computeEstado(c);
       c.updatedAt = nowIso();
       storage.set(KEY, all);
+
+      auditStore.add({
+        timestamp: nowIso(), actorId: medicoId,
+        actorName: medicosStore.list().find(m => m.userId === medicoId)?.displayName ?? medicoId,
+        evento: "CONV_RESPONDIDA_RECHAZO", entidadId: convId,
+        datos: { sector: c.sector, sede: c.sede ?? "" },
+      });
+
       return { conflict: false };
     }
 
@@ -524,6 +543,14 @@ export const convocatoriaStore = {
 
     c.updatedAt = nowIso();
     storage.set(KEY, all);
+
+    auditStore.add({
+      timestamp: nowIso(), actorId: medicoId,
+      actorName: medicosStore.list().find(m => m.userId === medicoId)?.displayName ?? medicoId,
+      evento: "CONV_RESPONDIDA_ACEPTO", entidadId: convId,
+      datos: { sector: c.sector, sede: c.sede ?? "" },
+    });
+
     return { conflict: false };
   },
 
@@ -610,6 +637,13 @@ export const convocatoriaStore = {
     c.updatedAt = nowIso();
 
     storage.set(KEY, all);
+
+    auditStore.add({
+      timestamp: nowIso(), actorId,
+      actorName: medicosStore.list().find(m => m.userId === actorId)?.displayName ?? actorId,
+      evento: "CONV_CANCELADA", entidadId: convId,
+      datos: { sector: c.sector, motivo: reason?.trim() || "Cancelada" },
+    });
   },
 
   hardDelete(convId: string) {
@@ -648,6 +682,12 @@ export const convocatoriaStore = {
     a.devolucionMotivo = motivo.trim() || "Sin motivo especificado";
     c.updatedAt = nowIso();
     storage.set(KEY, all);
+    auditStore.add({
+      timestamp: nowIso(), actorId: a.medicoId,
+      actorName: medicosStore.list().find(m => m.userId === a.medicoId)?.displayName ?? a.medicoId,
+      evento: "DEVOLUCION_SOLICITADA", entidadId: asigId,
+      datos: { convId, sector: c.sector, motivo: a.devolucionMotivo },
+    });
     return true;
   },
 
@@ -664,6 +704,12 @@ export const convocatoriaStore = {
     c.estado = computeEstado(c);
     c.updatedAt = nowIso();
     storage.set(KEY, all);
+    auditStore.add({
+      timestamp: nowIso(), actorId: aprobadorId,
+      actorName: medicosStore.list().find(m => m.userId === aprobadorId)?.displayName ?? aprobadorId,
+      evento: "DEVOLUCION_APROBADA", entidadId: asigId,
+      datos: { convId, sector: c.sector },
+    });
     return true;
   },
 
